@@ -27,7 +27,7 @@ STEPS: list[Step] = [
     Step("sasa", tuple(), lambda c: c.analyses.sasa and c.sasa.enabled),
     Step("ligand_site", tuple(), lambda c: c.analyses.ligand_site),
     Step("distance", tuple(), lambda c: c.analyses.distance and c.distance.enabled),
-    Step("ramachandran", tuple(), lambda c: c.analyses.ramachandran and c.ramachandran.enabled),
+    Step("ramachandran", tuple(), lambda c: c.analyses.ramachandran),
 ]
 
 STEP_INDEX = {step.name: step for step in STEPS}

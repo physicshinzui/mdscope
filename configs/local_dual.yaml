@@ -24,7 +24,7 @@ analyses:
   ligand_site: false
   sasa: false
   distance: true
-  ramachandran: false
+  ramachandran: true 
 rmsd:
   enabled: true
   reference: ../../data/pdbs/2YXJ.pdb

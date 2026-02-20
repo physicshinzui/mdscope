@@ -209,7 +209,6 @@ class DistanceConfig(BaseModel):
 
 
 class RamachandranConfig(BaseModel):
-    enabled: bool = False
     mode: Literal["global", "per_residue", "both"] = "both"
     selection: str = "protein"
     residues: list[str] = []
@@ -428,7 +427,7 @@ def generate_template(preset: str = "standard") -> str:
                 }
             ],
         },
-        "ramachandran": {"enabled": False, "mode": "both", "selection": "protein", "residues": ["A:45", "A:143"]},
+        "ramachandran": {"mode": "both", "selection": "protein", "residues": ["A:45", "A:143"]},
     }
     merged = apply_preset(base)
     return yaml.safe_dump(merged, sort_keys=False, allow_unicode=False)
