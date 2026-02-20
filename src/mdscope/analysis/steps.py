@@ -250,8 +250,13 @@ def run_rmsd(ctx: RunContext) -> None:
     all_rows = []
     mapping_rows = []
     mapping_mode_rows = []
+    export_rows = []
+    export_root = dirs["representatives"] / "rmsd_below_threshold"
+    export_root.mkdir(parents=True, exist_ok=True)
+    export_count_by_traj: dict[str, int] = {}
 
     for traj_name, u in universes:
+        export_count_by_traj.setdefault(traj_name, 0)
         mobile_residues, ref_residues, mapping, selected_mapping_strategy = build_residue_mapping(
             mobile_universe=u,
             reference_universe=reference,
@@ -343,6 +348,28 @@ def run_rmsd(ctx: RunContext) -> None:
                 superpose=cfg.rmsd.align,
             )
             all_rows.append({"trajectory": traj_name, "frame": int(ts.frame), "rmsd": rmsd, "n_atoms_used": n_used})
+            if (
+                cfg.rmsd.export_below_threshold
+                and rmsd <= cfg.rmsd.threshold_angstrom
+                and export_count_by_traj[traj_name] < max(cfg.rmsd.max_export_frames, 0)
+            ):
+                if cfg.rmsd.export_selection.strip().lower() == "all":
+                    export_ag = u.atoms
+                else:
+                    export_ag = u.select_atoms(cfg.rmsd.export_selection)
+                if len(export_ag) > 0:
+                    out_pdb = export_root / f"{traj_name}_frame_{int(ts.frame):05d}_rmsd_{rmsd:.3f}.pdb"
+                    export_ag.write(str(out_pdb))
+                    export_rows.append(
+                        {
+                            "trajectory": traj_name,
+                            "frame": int(ts.frame),
+                            "rmsd": float(rmsd),
+                            "n_atoms_exported": int(len(export_ag)),
+                            "pdb_path": str(out_pdb),
+                        }
+                    )
+                    export_count_by_traj[traj_name] += 1
             if cfg.rmsd.debug_write_aligned_pdb and debug_written < max(cfg.rmsd.debug_max_frames, 0):
                 if cfg.rmsd.align:
                     mob_coords_aligned = _kabsch_fit(mob_coords, ref_coords)
@@ -365,6 +392,8 @@ def run_rmsd(ctx: RunContext) -> None:
     df = pd.DataFrame(all_rows)
     df.to_csv(dirs["tables"] / "rmsd_vs_reference.csv", index=False)
     pd.DataFrame(mapping_rows).to_csv(dirs["tables"] / "residue_mapping.csv", index=False)
+    if cfg.rmsd.export_below_threshold:
+        pd.DataFrame(export_rows).to_csv(dirs["tables"] / "rmsd_below_threshold_frames.csv", index=False)
     report = {
         "mapped_pairs": int(len(mapping_rows)),
         "map_mode": cfg.rmsd.map_mode,
@@ -380,6 +409,13 @@ def run_rmsd(ctx: RunContext) -> None:
         if cfg.rmsd.region_mode == "ligand_site"
         else None,
         "mapping_strategy_per_trajectory": mapping_mode_rows,
+        "export_below_threshold": cfg.rmsd.export_below_threshold,
+        "threshold_angstrom": cfg.rmsd.threshold_angstrom,
+        "export_selection": cfg.rmsd.export_selection,
+        "max_export_frames": cfg.rmsd.max_export_frames,
+        "exported_frame_count": len(export_rows),
+        "exported_frame_count_by_trajectory": export_count_by_traj,
+        "export_dir": str(export_root),
     }
     (dirs["data"] / "mapping_report.json").write_text(json.dumps(report, indent=2))
     _plot_timeseries_and_distribution(cfg, df, "frame", "rmsd", "trajectory", "rmsd", "RMSD")

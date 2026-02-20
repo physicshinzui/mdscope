@@ -88,6 +88,10 @@ class RmsdConfig(BaseModel):
     site_cutoff: float = 4.0
     min_mapped: int = 30
     min_coverage: float = 0.7
+    export_below_threshold: bool = False
+    threshold_angstrom: float = 1.5
+    export_selection: str = "all"
+    max_export_frames: int = 100
 
 
 class RmsfConfig(BaseModel):
@@ -388,6 +392,10 @@ def generate_template(preset: str = "standard") -> str:
             "region_mode": "global",
             "ligand_selection": "not protein and not resname SOL and not resname HOH",
             "site_cutoff": 4.0,
+            "export_below_threshold": False,
+            "threshold_angstrom": 1.5,
+            "export_selection": "all",
+            "max_export_frames": 100,
         },
         "rmsf": {
             "enabled": True,

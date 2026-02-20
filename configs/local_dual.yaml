@@ -38,7 +38,11 @@ rmsd:
   min_mapped: 10
   min_coverage: 0.2
   debug_write_aligned_pdb: true
-  debug_max_frames: 5
+  debug_max_frames: 1
+  export_below_threshold: true
+  threshold_angstrom: 1.5
+  export_selection: "all"
+  max_export_frames: 50
 rmsf:
   enabled: true
   selection: "protein and name CA"
