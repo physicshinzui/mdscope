@@ -1,0 +1,26 @@
+__pycache__/
+.pytest_cache/
+*.pyc
+*.pyo
+.Python
+.venv/
+env/
+venv/
+
+# Build / packaging
+results/
+build/
+dist/
+*.egg-info/
+
+# Analysis outputs
+configs/results/
+configs/results_*/
+
+# Matplotlib cache (created under outdir)
+.cache/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
