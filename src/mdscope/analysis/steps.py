@@ -13,6 +13,33 @@ from .mapping import (
     residue_records,
 )
 
+# Reference for maximum solvent accessibility values used for rSASA:
+# Tien, M. Z.; Meyer, A. G.; Sydykova, D. K.; Spielman, S. J.; Wilke, C. O.
+# Maximum Allowed Solvent Accessibilites of Residues in Proteins.
+# PLoS One 2013, 8 (11), e80635.
+TIEN2013_MAX_ASA: dict[str, float] = {
+    "ALA": 129.0,
+    "ARG": 274.0,
+    "ASN": 195.0,
+    "ASP": 193.0,
+    "CYS": 167.0,
+    "GLN": 225.0,
+    "GLU": 223.0,
+    "GLY": 104.0,
+    "HIS": 224.0,
+    "ILE": 197.0,
+    "LEU": 201.0,
+    "LYS": 236.0,
+    "MET": 224.0,
+    "PHE": 240.0,
+    "PRO": 159.0,
+    "SER": 155.0,
+    "THR": 172.0,
+    "TRP": 285.0,
+    "TYR": 263.0,
+    "VAL": 174.0,
+}
+
 
 @dataclass
 class RunContext:
@@ -1137,6 +1164,10 @@ def run_sasa(ctx: RunContext) -> None:
 
     rows = []
     residue_rows = []
+    missing_maxasa: dict[str, set[str]] = {}
+    maxasa_table = TIEN2013_MAX_ASA if cfg.sasa.reference_scale == "tien2013" else TIEN2013_MAX_ASA
+    value_col = "rsasa" if cfg.sasa.relative else "sasa"
+    value_label = "rSASA" if cfg.sasa.relative else "SASA"
     for traj_name, u in _load_universes(cfg):
         ag = u.select_atoms(cfg.sasa.selection)
         residues = list(ag.residues)
@@ -1170,14 +1201,27 @@ def run_sasa(ctx: RunContext) -> None:
         for frame_i in range(n_frames):
             for ri in range(n_use):
                 residue = residues[ri]
+                resname = str(residue.resname)
+                max_asa = maxasa_table.get(resname)
+                rsasa = np.nan
+                if max_asa and max_asa > 0:
+                    rsasa = float(residue_area[frame_i, ri]) / float(max_asa)
+                    if cfg.sasa.rsasa_clip:
+                        rsasa = float(np.clip(rsasa, 0.0, 1.0))
+                else:
+                    missing_maxasa.setdefault(traj_name, set()).add(resname)
+                sasa_val = float(residue_area[frame_i, ri])
                 residue_rows.append(
                     {
                         "trajectory": traj_name,
                         "frame_index": frame_i,
                         "chain": str(residue.segid).strip(),
                         "resid": int(residue.resid),
-                        "resname": str(residue.resname),
-                        "sasa": float(residue_area[frame_i, ri]),
+                        "resname": resname,
+                        "sasa": sasa_val,
+                        "rsasa": float(rsasa),
+                        "value": float(rsasa) if cfg.sasa.relative else sasa_val,
+                        "value_kind": value_col,
                     }
                 )
 
@@ -1197,8 +1241,25 @@ def run_sasa(ctx: RunContext) -> None:
         summary = residue_df.groupby(["trajectory", "chain", "resid", "resname"], as_index=False).agg(
             sasa_mean=("sasa", "mean"),
             sasa_std=("sasa", "std"),
+            rsasa_mean=("rsasa", "mean"),
+            rsasa_std=("rsasa", "std"),
+            value_mean=("value", "mean"),
+            value_std=("value", "std"),
         )
         summary.to_csv(dirs["tables"] / "sasa_per_residue_summary.csv", index=False)
+        if missing_maxasa:
+            note_rows = []
+            for traj_name in sorted(missing_maxasa):
+                for resname in sorted(missing_maxasa[traj_name]):
+                    note_rows.append(
+                        {
+                            "trajectory": traj_name,
+                            "resname": resname,
+                            "reference_scale": cfg.sasa.reference_scale,
+                            "note": "maxASA not found; rsasa set to NaN",
+                        }
+                    )
+            pd.DataFrame(note_rows).to_csv(dirs["tables"] / "sasa_rsasa_notes.csv", index=False)
 
         per_res_fig_dir = dirs["figures"] / "sasa_per_residue"
         per_res_fig_dir.mkdir(parents=True, exist_ok=True)
@@ -1211,14 +1272,16 @@ def run_sasa(ctx: RunContext) -> None:
             sub = sub.sort_values("frame_index")
 
             fig_ts, ax_ts = plt.subplots(figsize=(7.2, 4.5))
-            ax_ts.plot(sub["frame_index"], sub["sasa"], lw=1.2, ls="-")
+            ax_ts.plot(sub["frame_index"], sub["value"], lw=1.2, ls="-")
             ax_ts.set_xlabel("frame_index")
-            ax_ts.set_ylabel("SASA")
+            ax_ts.set_ylabel(value_label)
+            if cfg.sasa.relative:
+                ax_ts.set_ylim(0.0, 1.0)
             ax_ts.set_title(f"{traj_name} {chain_label}:{int(resid)} {resname}")
             _save_plot(cfg, fig_ts, per_res_fig_dir / f"{stem}_timeseries")
             plt.close(fig_ts)
 
-            values = sub["sasa"].dropna().to_numpy()
+            values = sub["value"].dropna().to_numpy()
             if len(values) == 0:
                 continue
             fig_dist, ax_dist = plt.subplots(figsize=(6, 6))
@@ -1231,8 +1294,10 @@ def run_sasa(ctx: RunContext) -> None:
                 kernel = np.exp(-0.5 * ((xs[:, None] - values[None, :]) / bw) ** 2)
                 density = kernel.sum(axis=1) / (len(values) * bw * np.sqrt(2.0 * np.pi))
                 ax_dist.plot(xs, density, lw=1.2)
-            ax_dist.set_xlabel("SASA")
+            ax_dist.set_xlabel(value_label)
             ax_dist.set_ylabel("density")
+            if cfg.sasa.relative:
+                ax_dist.set_xlim(0.0, 1.0)
             ax_dist.set_title(f"{traj_name} {chain_label}:{int(resid)} {resname}")
             _save_plot(cfg, fig_dist, per_res_fig_dir / f"{stem}_distribution")
             plt.close(fig_dist)

@@ -175,6 +175,9 @@ class SasaConfig(BaseModel):
     level: Literal["atom", "residue"] = "residue"
     probe_radius: float = 1.4
     n_sphere_points: int = 960
+    relative: bool = True
+    reference_scale: Literal["tien2013"] = "tien2013"
+    rsasa_clip: bool = False
 
 
 class DsspConfig(BaseModel):
@@ -415,7 +418,15 @@ def generate_template(preset: str = "standard") -> str:
             "site_map_mode": "align",
         },
         "cluster": {"enabled": True, "method": "hdbscan", "min_cluster_size": 100, "representative_method": "medoid"},
-        "sasa": {"enabled": True, "selection": "protein", "level": "residue", "probe_radius": 1.4},
+        "sasa": {
+            "enabled": True,
+            "selection": "protein",
+            "level": "residue",
+            "probe_radius": 1.4,
+            "relative": True,
+            "reference_scale": "tien2013",
+            "rsasa_clip": False,
+        },
         "dssp": {"selection": "protein", "coil_code": "C"},
         "distance": {
             "enabled": False,
