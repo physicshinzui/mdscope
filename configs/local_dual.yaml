@@ -22,7 +22,7 @@ output:
 analyses:
   dssp: true 
   ligand_site: false
-  sasa: false
+  sasa: true 
   distance: true
   ramachandran: true 
 rmsd:

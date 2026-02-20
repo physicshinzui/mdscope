@@ -875,6 +875,7 @@ def run_ramachandran(ctx: RunContext) -> None:
     dirs = ensure_dirs(ctx.outdir)
     cfg = ctx.config
     rows = []
+    note_rows = []
 
     residue_filter: set[tuple[str, int]] | None = None
     if cfg.ramachandran.residues:
@@ -889,11 +890,29 @@ def run_ramachandran(ctx: RunContext) -> None:
 
     for traj_name, u in _load_universes(cfg):
         ag = u.select_atoms(cfg.ramachandran.selection)
+        input_residues = list(ag.residues)
         rama = Ramachandran(ag).run(start=cfg.frames.start, stop=cfg.frames.stop, step=cfg.frames.step)
         angles = rama.results.angles
         # Use Ramachandran internal residue list (ag2) to keep exact index correspondence
         # with results.angles; this excludes residues that cannot define phi/psi.
         residues = list(rama.ag2.residues)
+        input_keys = {(str(r.segid).strip(), int(r.resid), str(r.resname)) for r in input_residues}
+        used_keys = {(str(r.segid).strip(), int(r.resid), str(r.resname)) for r in residues}
+        excluded = sorted(input_keys - used_keys, key=lambda x: (x[0], x[1], x[2]))
+        excluded_preview = ";".join([f"{c}:{rid}:{rn}" for c, rid, rn in excluded[:25]])
+        note_rows.append(
+            {
+                "trajectory": traj_name,
+                "input_residue_count": len(input_residues),
+                "used_residue_count": len(residues),
+                "excluded_residue_count": len(excluded),
+                "exclusion_note": (
+                    "Terminal residues and residues lacking required backbone atoms "
+                    "(for phi/psi) are excluded by Ramachandran analysis."
+                ),
+                "excluded_residues_preview": excluded_preview,
+            }
+        )
         for frame_i, frame_vals in enumerate(angles):
             for res_i, (phi, psi) in enumerate(frame_vals):
                 if res_i >= len(residues):
@@ -917,6 +936,7 @@ def run_ramachandran(ctx: RunContext) -> None:
 
     df = pd.DataFrame(rows)
     df.to_csv(dirs["tables"] / "phi_psi_timeseries.csv", index=False)
+    pd.DataFrame(note_rows).to_csv(dirs["tables"] / "ramachandran_notes.csv", index=False)
     if len(df) == 0:
         return
 
