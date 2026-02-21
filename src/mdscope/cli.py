@@ -17,7 +17,7 @@ app = typer.Typer(help="MD trajectory analysis automation (config-first)")
 @app.command("init-config")
 def init_config(
     output: Annotated[Path, typer.Option("-o", "--output", help="Destination YAML")] = Path("config.yaml"),
-    preset: Annotated[str, typer.Option("--preset", help="quick|standard|full")] = "standard",
+    preset: Annotated[str, typer.Option("--preset", help="standard|full")] = "standard",
 ) -> None:
     if preset not in PRESETS:
         raise typer.BadParameter(f"Unknown preset: {preset}")

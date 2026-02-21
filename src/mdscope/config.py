@@ -236,7 +236,7 @@ class AnalysesConfig(BaseModel):
 
 
 class AppConfig(BaseModel):
-    preset: Literal["quick", "standard", "full"] = "standard"
+    preset: Literal["standard", "full"] = "standard"
     system: SystemConfig
     frames: FramesConfig = FramesConfig()
     runtime: RuntimeConfig = RuntimeConfig()
@@ -265,15 +265,6 @@ class AppConfig(BaseModel):
 
 
 PRESETS: dict[str, dict] = {
-    "quick": {
-        "analyses": {
-            "dssp": False,
-            "cluster": False,
-            "representative": False,
-            "ligand_site": False,
-            "ramachandran": False,
-        }
-    },
     "standard": {},
     "full": {
         "analyses": {
