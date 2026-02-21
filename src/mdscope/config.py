@@ -457,6 +457,7 @@ system:
   # topologies:
   #   - ../data/WT/topology.pdb
   #   - ../data/F143W/topology.pdb
+  topologies: null
   trajectories:
     - ../data/WT/samples.xtc
     - ../data/F143W/samples.xtc
@@ -501,6 +502,7 @@ plot:
 rmsd:
   reference: ../data/pdbs/2YXJ.pdb
   map_mode: align
+  map_file: null  # required when map_mode: user_map
   selection: name CA
   align: true
   align_selection: protein and name CA
@@ -546,7 +548,7 @@ pca:
   site_atom_selection: name CA
   site_align_selection: protein and name CA
   site_map_mode: align  # strict | align | user_map
-  # site_map_file: ../data/maps/pca_site_map.csv
+  site_map_file: null  # required when site_map_mode: user_map
 
 cluster:
   method: hdbscan
@@ -558,6 +560,7 @@ cluster:
   representative_method: medoid  # medoid | centroid_nearest | random
   representative_random_n: 1
   representative_random_seed: 42
+  representative_scope: both  # global | per_trajectory | both
 
 sasa:
   selection: protein
@@ -573,6 +576,7 @@ dssp:
   coil_code: C
 
 distance:
+  # Empty list is allowed.
   pairs:
     - id: active_site
       sel1: segid A and resid 45 and name CA
