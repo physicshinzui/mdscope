@@ -169,7 +169,9 @@ class ClusterConfig(BaseModel):
     metric: str = "euclidean"
     selection_method: Literal["eom", "leaf"] = "eom"
     allow_single_cluster: bool = False
-    representative_method: Literal["medoid", "centroid_nearest"] = "medoid"
+    representative_method: Literal["medoid", "centroid_nearest", "random"] = "medoid"
+    representative_random_n: int = 1
+    representative_random_seed: int | None = None
     representative_scope: Literal["global", "per_trajectory", "both"] = "both"
 
 
@@ -416,7 +418,14 @@ def generate_template(preset: str = "standard") -> str:
             "site_align_selection": "protein and name CA",
             "site_map_mode": "align",
         },
-        "cluster": {"enabled": True, "method": "hdbscan", "min_cluster_size": 100, "representative_method": "medoid"},
+        "cluster": {
+            "enabled": True,
+            "method": "hdbscan",
+            "min_cluster_size": 100,
+            "representative_method": "medoid",
+            "representative_random_n": 1,
+            "representative_random_seed": 42,
+        },
         "sasa": {
             "enabled": True,
             "selection": "protein",
