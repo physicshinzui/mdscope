@@ -74,7 +74,6 @@ class RuntimeConfig(BaseModel):
 class RmsdConfig(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
-    enabled: bool = True
     reference: Path | None = None
     map_mode: Literal["strict", "align", "user_map"] = "align"
     map_file: Path | None = None
@@ -95,7 +94,6 @@ class RmsdConfig(BaseModel):
 
 
 class RmsfConfig(BaseModel):
-    enabled: bool = True
     selection: str = "protein and name CA"
     align: bool = True
     align_to: Literal["average", "first"] = "average"
@@ -103,7 +101,6 @@ class RmsfConfig(BaseModel):
 
 
 class PcaConfig(BaseModel):
-    enabled: bool = True
     mode: Literal["project", "joint"] = "project"
     fit_trajectory: str | None = None
     align: bool = True
@@ -163,7 +160,6 @@ class PcaConfig(BaseModel):
 
 
 class ClusterConfig(BaseModel):
-    enabled: bool = True
     method: Literal["hdbscan"] = "hdbscan"
     min_cluster_size: int = 100
     min_samples: int | None = None
@@ -177,7 +173,6 @@ class ClusterConfig(BaseModel):
 
 
 class SasaConfig(BaseModel):
-    enabled: bool = True
     selection: str = "protein"
     level: Literal["atom", "residue"] = "residue"
     probe_radius: float = 1.4
@@ -214,7 +209,6 @@ class DistanceItem(BaseModel):
 
 
 class DistanceConfig(BaseModel):
-    enabled: bool = False
     pairs: list[DistanceItem] = []
 
 
@@ -355,6 +349,9 @@ def _resolve(base_dir: Path, path: Path) -> Path:
 
 
 def generate_template(preset: str = "standard") -> str:
+    if preset == "full":
+        return _generate_full_template_with_comments()
+
     base = {
         "preset": preset,
         "system": {
@@ -375,7 +372,6 @@ def generate_template(preset: str = "standard") -> str:
             "hist_bins": None,
         },
         "rmsd": {
-            "enabled": True,
             "reference": "../data/pdbs/2YXJ.pdb",
             "map_mode": "align",
             "selection": "name CA",
@@ -392,14 +388,12 @@ def generate_template(preset: str = "standard") -> str:
             "max_export_frames": 100,
         },
         "rmsf": {
-            "enabled": True,
             "selection": "protein and name CA",
             "align": True,
             "align_to": "average",
             "align_selection": "protein and backbone",
         },
         "pca": {
-            "enabled": True,
             "mode": "project",
             "fit_trajectory": "WT",
             "align": True,
@@ -421,7 +415,6 @@ def generate_template(preset: str = "standard") -> str:
             "site_map_mode": "align",
         },
         "cluster": {
-            "enabled": True,
             "method": "hdbscan",
             "min_cluster_size": 100,
             "representative_method": "medoid",
@@ -429,7 +422,6 @@ def generate_template(preset: str = "standard") -> str:
             "representative_random_seed": 42,
         },
         "sasa": {
-            "enabled": True,
             "selection": "protein",
             "level": "residue",
             "probe_radius": 1.4,
@@ -439,7 +431,6 @@ def generate_template(preset: str = "standard") -> str:
         },
         "dssp": {"selection": "protein", "coil_code": "C"},
         "distance": {
-            "enabled": False,
             "pairs": [
                 {
                     "id": "active_site",
@@ -452,3 +443,143 @@ def generate_template(preset: str = "standard") -> str:
     }
     merged = apply_preset(base)
     return yaml.safe_dump(merged, sort_keys=False, allow_unicode=False)
+
+
+def _generate_full_template_with_comments() -> str:
+    return """# mdscope full preset template
+# Tip: execution on/off is controlled only by `analyses.*`
+preset: full
+
+system:
+  # Use one shared topology for all trajectories:
+  topology: ../data/WT/topology.pdb
+  # Or use per-trajectory topologies (same length as trajectories):
+  # topologies:
+  #   - ../data/WT/topology.pdb
+  #   - ../data/F143W/topology.pdb
+  trajectories:
+    - ../data/WT/samples.xtc
+    - ../data/F143W/samples.xtc
+  trajectory_names: [WT, F143W]
+  selection: protein
+  align_selection: backbone
+
+frames:
+  start: 0
+  stop: null
+  step: 10
+
+runtime:
+  seed: 42
+  resume: false
+
+output:
+  outdir: results
+  figure_formats: [png, pdf]
+  dpi: 300
+
+analyses:
+  rmsd: true
+  rmsf: true
+  dssp: true
+  pca: true
+  cluster: true
+  representative: true
+  rg: true
+  sasa: true
+  ligand_site: false
+  distance: true
+  ramachandran: true
+
+plot:
+  publication_style: true
+  timeseries_distribution: true
+  distribution_kind: hist_kde
+  hist_bin_method: fd
+  hist_bins: null
+
+rmsd:
+  reference: ../data/pdbs/2YXJ.pdb
+  map_mode: align
+  selection: name CA
+  align: true
+  align_selection: protein and name CA
+  debug_write_aligned_pdb: true
+  debug_max_frames: 1
+  region_mode: global  # global | ligand_site
+  ligand_selection: not protein and not resname SOL and not resname HOH
+  site_cutoff: 4.0
+  min_mapped: 30
+  min_coverage: 0.7
+  # Export frames below RMSD threshold as PDB:
+  export_below_threshold: false
+  threshold_angstrom: 1.5
+  export_selection: all
+  max_export_frames: 100
+
+rmsf:
+  selection: protein and name CA
+  align: true
+  align_to: average  # average | first
+  align_selection: protein and backbone
+
+pca:
+  mode: project  # project | joint
+  fit_trajectory: WT
+  align: true
+  selection: backbone
+  n_components: 10
+  use_pcs: [1, 2, 3, 4, 5]
+  reference_pdbs: [../data/pdbs/2YXJ.pdb]
+  reference_names: [xtal_2YXJ]
+  # PC1-PC2 free energy (RT units):
+  free_energy_enabled: true
+  free_energy_bins: auto_fd  # auto_fd or integer
+  free_energy_level_step_rt: 0.2
+  free_energy_smooth_sigma: 1.0
+  free_energy_per_trajectory: false
+  # Ligand-site PCA (optional):
+  site_from_reference_ligand: false
+  site_reference_pdb: ../data/pdbs/2YXJ.pdb
+  site_ligand_selection: resname N3C
+  site_cutoff: 5.0
+  site_atom_selection: name CA
+  site_align_selection: protein and name CA
+  site_map_mode: align  # strict | align | user_map
+  # site_map_file: ../data/maps/pca_site_map.csv
+
+cluster:
+  method: hdbscan
+  min_cluster_size: 100
+  min_samples: null
+  metric: euclidean
+  selection_method: eom
+  allow_single_cluster: false
+  representative_method: medoid  # medoid | centroid_nearest | random
+  representative_random_n: 1
+  representative_random_seed: 42
+
+sasa:
+  selection: protein
+  level: residue
+  probe_radius: 1.4
+  n_sphere_points: 960
+  relative: true
+  reference_scale: tien2013
+  rsasa_clip: false
+
+dssp:
+  selection: protein
+  coil_code: C
+
+distance:
+  pairs:
+    - id: active_site
+      sel1: segid A and resid 45 and name CA
+      sel2: segid A and resid 143 and name CA
+
+ramachandran:
+  mode: both  # global | per_residue | both
+  selection: protein
+  residues: [A:45, A:143]
+"""

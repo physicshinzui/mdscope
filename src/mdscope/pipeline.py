@@ -17,16 +17,16 @@ class Step:
 
 
 STEPS: list[Step] = [
-    Step("rmsd", tuple(), lambda c: c.analyses.rmsd and c.rmsd.enabled),
-    Step("rmsf", tuple(), lambda c: c.analyses.rmsf and c.rmsf.enabled),
+    Step("rmsd", tuple(), lambda c: c.analyses.rmsd),
+    Step("rmsf", tuple(), lambda c: c.analyses.rmsf),
     Step("dssp", tuple(), lambda c: c.analyses.dssp),
-    Step("pca", tuple(), lambda c: c.analyses.pca and c.pca.enabled),
-    Step("cluster", ("pca",), lambda c: c.analyses.cluster and c.cluster.enabled),
-    Step("representative", ("cluster",), lambda c: c.analyses.representative and c.cluster.enabled),
+    Step("pca", tuple(), lambda c: c.analyses.pca),
+    Step("cluster", ("pca",), lambda c: c.analyses.cluster),
+    Step("representative", ("cluster",), lambda c: c.analyses.representative),
     Step("rg", tuple(), lambda c: c.analyses.rg),
-    Step("sasa", tuple(), lambda c: c.analyses.sasa and c.sasa.enabled),
+    Step("sasa", tuple(), lambda c: c.analyses.sasa),
     Step("ligand_site", tuple(), lambda c: c.analyses.ligand_site),
-    Step("distance", tuple(), lambda c: c.analyses.distance and c.distance.enabled),
+    Step("distance", tuple(), lambda c: c.analyses.distance),
     Step("ramachandran", tuple(), lambda c: c.analyses.ramachandran),
 ]
 
