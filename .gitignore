@@ -16,6 +16,7 @@ dist/
 # Analysis outputs
 configs/results/
 configs/results_*/
+configs/*.yaml
 
 # Matplotlib cache (created under outdir)
 .cache/

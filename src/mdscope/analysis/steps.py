@@ -176,6 +176,22 @@ def _kabsch_fit(mobile: Any, reference: Any) -> Any:
     return m0 @ rot + ref_center
 
 
+def _kabsch_transform_coords(
+    mobile_fit: Any,
+    reference_fit: Any,
+    coords_to_transform: Any,
+) -> Any:
+    _, _, _, _ = _imports()
+    from MDAnalysis.analysis import align
+
+    mob_center = mobile_fit.mean(axis=0)
+    ref_center = reference_fit.mean(axis=0)
+    m0 = mobile_fit - mob_center
+    r0 = reference_fit - ref_center
+    rot, _ = align.rotation_matrix(m0, r0)
+    return (coords_to_transform - mob_center) @ rot + ref_center
+
+
 def _compute_rmsd(
     mobile_coords: Any,
     ref_coords: Any,
@@ -596,17 +612,17 @@ def run_pca(ctx: RunContext) -> None:
     universes = _load_universes(cfg)
     universe_map = {name: u for name, u in universes}
     fit_name = cfg.pca.fit_trajectory or names[0]
+    fit_u = universe_map[fit_name]
+    fit_u.trajectory[0]
 
     if cfg.pca.align:
-        fit_u = universe_map[fit_name]
-        fit_u.trajectory[0]
         align_sel = cfg.pca.site_align_selection if cfg.pca.site_from_reference_ligand else cfg.system.align_selection
+        fit_ref = fit_u.copy()
+        fit_ref.trajectory[0]
         for name, u in universes:
-            if name == fit_name:
-                continue
             AlignTraj(
                 u,
-                fit_u,
+                fit_ref,
                 select=align_sel,
                 in_memory=True,
             ).run(start=cfg.frames.start, stop=cfg.frames.stop, step=cfg.frames.step)
@@ -717,6 +733,40 @@ def run_pca(ctx: RunContext) -> None:
     for idx, pdb_path in enumerate(cfg.pca.reference_pdbs):
         mda, _, _, _ = _imports()
         ref_u = mda.Universe(str(pdb_path))
+
+        if cfg.pca.align:
+            align_sel = cfg.pca.site_align_selection if cfg.pca.site_from_reference_ligand else cfg.system.align_selection
+            fit_res, ref_res, mapping, _ = build_residue_mapping(
+                mobile_universe=fit_u,
+                reference_universe=ref_u,
+                align_selection=align_sel,
+                map_mode="align",
+                map_file=None,
+            )
+            fit_align_idx: list[int] = []
+            ref_align_idx: list[int] = []
+            for fit_i, ref_i in mapping:
+                fit_atoms = fit_res[fit_i].atoms.select_atoms(align_sel)
+                ref_atoms = ref_res[ref_i].atoms.select_atoms(align_sel)
+                if len(fit_atoms) == 0 or len(ref_atoms) == 0:
+                    continue
+                fit_by_name = {str(a.name): int(a.index) for a in fit_atoms}
+                for a in ref_atoms:
+                    fit_idx = fit_by_name.get(str(a.name))
+                    if fit_idx is None:
+                        continue
+                    fit_align_idx.append(fit_idx)
+                    ref_align_idx.append(int(a.index))
+            if len(fit_align_idx) >= 3:
+                fit_align_coords = fit_u.atoms[fit_align_idx].positions.copy()
+                ref_align_coords = ref_u.atoms[ref_align_idx].positions.copy()
+            else:
+                fit_align_coords = None
+                ref_align_coords = None
+        else:
+            fit_align_coords = None
+            ref_align_coords = None
+
         if cfg.pca.site_from_reference_ligand:
             if site_key_order is None:
                 raise RuntimeError("Internal error: missing site key order for PCA site mode")
@@ -741,6 +791,9 @@ def run_pca(ctx: RunContext) -> None:
                     "Use a selection that matches the PCA fit atoms exactly."
                 )
             ref_vec = ref_atoms.positions.reshape(1, -1)
+        if fit_align_coords is not None and ref_align_coords is not None:
+            ref_vec_coords = ref_vec.reshape(-1, 3)
+            ref_vec = _kabsch_transform_coords(ref_align_coords, fit_align_coords, ref_vec_coords).reshape(1, -1)
         ref_sc = pca.transform(ref_vec)
         ref_name = cfg.pca.reference_names[idx] if idx < len(cfg.pca.reference_names) else pdb_path.stem
         row = {"trajectory": ref_name, "frame": -1}
