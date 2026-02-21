@@ -106,6 +106,7 @@ class PcaConfig(BaseModel):
     enabled: bool = True
     mode: Literal["project", "joint"] = "project"
     fit_trajectory: str | None = None
+    align: bool = True
     selection: str = "backbone"
     n_components: int = 10
     use_pcs: list[int] = [1, 2, 3, 4, 5]
@@ -401,6 +402,7 @@ def generate_template(preset: str = "standard") -> str:
             "enabled": True,
             "mode": "project",
             "fit_trajectory": "WT",
+            "align": True,
             "n_components": 10,
             "use_pcs": [1, 2, 3, 4, 5],
             "reference_pdbs": ["../data/pdbs/2YXJ.pdb"],

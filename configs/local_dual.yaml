@@ -72,7 +72,9 @@ pca:
 cluster:
   enabled: true
   min_cluster_size: 20
-  representative_method: medoid
+  representative_method: random
+  representative_random_n: 2
+  representative_random_seed: 7
 distance:
   enabled: true
   pairs:

@@ -584,6 +584,7 @@ def _plot_pca_free_energy_rt(
 
 def run_pca(ctx: RunContext) -> None:
     _, np, pd, plt = _imports()
+    from MDAnalysis.analysis.align import AlignTraj
     from sklearn.decomposition import PCA
 
     dirs = ensure_dirs(ctx.outdir)
@@ -593,6 +594,23 @@ def run_pca(ctx: RunContext) -> None:
     matrices: dict[str, Any] = {}
     frames_map: dict[str, list[int]] = {}
     universes = _load_universes(cfg)
+    universe_map = {name: u for name, u in universes}
+    fit_name = cfg.pca.fit_trajectory or names[0]
+
+    if cfg.pca.align:
+        fit_u = universe_map[fit_name]
+        fit_u.trajectory[0]
+        align_sel = cfg.pca.site_align_selection if cfg.pca.site_from_reference_ligand else cfg.system.align_selection
+        for name, u in universes:
+            if name == fit_name:
+                continue
+            AlignTraj(
+                u,
+                fit_u,
+                select=align_sel,
+                in_memory=True,
+            ).run(start=cfg.frames.start, stop=cfg.frames.stop, step=cfg.frames.step)
+
     site_key_order: list[tuple[str, int, str]] | None = None
     if cfg.pca.site_from_reference_ligand:
         site_ref_path = cfg.pca.site_reference_pdb or cfg.rmsd.reference
@@ -678,7 +696,6 @@ def run_pca(ctx: RunContext) -> None:
             matrices[name] = mat
             frames_map[name] = frames
 
-    fit_name = cfg.pca.fit_trajectory or names[0]
     fit_matrix = matrices[fit_name]
     pca = PCA(n_components=min(cfg.pca.n_components, fit_matrix.shape[1], fit_matrix.shape[0]))
 
