@@ -1,0 +1,108 @@
+preset: full
+system:
+  topologies:
+    - ../../data/WT/topology.pdb
+    - ../../data/F143W/topology.pdb
+  trajectories:
+    - ../../data/WT/samples.xtc
+    - ../../data/F143W/samples.xtc
+  trajectory_names:
+    - WT
+    - F143W
+  selection: backbone
+  align_selection: backbone
+frames:
+  start: 0
+  stop: 1500
+  step: 1
+runtime:
+  seed: 42
+  resume: false
+output:
+  outdir: results_bclxl
+  figure_formats:
+  - png
+  - pdf
+  dpi: 300
+plot:
+  publication_style: true
+  timeseries_distribution: true
+  hist_bin_method: fd
+  hist_bins: null
+rmsd:
+  reference: ../../data/pdbs/2YXJ.pdb
+  map_mode: align
+  selection: name CA
+  align: true
+  align_selection: protein and name CA
+  debug_write_aligned_pdb: true
+  debug_max_frames: 5
+  min_mapped: 1
+
+  region_mode: ligand_site # global
+  ligand_selection: "resname N3C"
+  site_cutoff: 5.0
+  min_mapped: 10
+  min_coverage: 0.2
+  # extract pdbs below a threshold
+  export_below_threshold: true
+  threshold_angstrom: 1.5
+  export_selection: "all"
+  max_export_frames: 50
+
+rmsf:
+  selection: protein and name CA
+  align: true
+  align_to: average
+  align_selection: backbone
+pca:
+  mode: project
+  fit_trajectory: WT
+  align: true
+  selection: name CA
+  n_components: 3
+  use_pcs: [1, 2, 3]
+  reference_pdbs:
+  - ../../data/pdbs/2YXJ.pdb
+  reference_names:
+  - 5awl
+  free_energy_enabled: true
+  free_energy_bins: auto_fd
+  free_energy_level_step_rt: 1.0
+  free_energy_smooth_sigma: 2.0
+  free_energy_per_trajectory: false
+  site_from_reference_ligand: true 
+  site_reference_pdb: ../../data/pdbs/2YXJ.pdb
+  site_ligand_selection: resname N3C
+  site_cutoff: 5.0
+  site_atom_selection: name CA
+  site_align_selection: name CA
+  site_map_mode: align
+cluster:
+  method: hdbscan
+  min_cluster_size: 10
+  representative_method: medoid
+  allow_single_cluster: true
+sasa:
+  selection: protein
+  level: residue
+  probe_radius: 1.4
+  relative: true
+  reference_scale: tien2013
+  rsasa_clip: false
+dssp:
+  selection: protein
+  coil_code: C
+#distance:
+#  pairs:
+#  - id: active_site
+#    sel1: segid A and resid 1 and name CA
+#    sel2: segid A and resid 10 and name CA
+ramachandran:
+  mode: both
+  selection: protein
+#  residues: [A:2, A:3]
+analyses:
+#  distance: true
+#  ramachandran: true
+#  sasa: true

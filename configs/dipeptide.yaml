@@ -1,0 +1,106 @@
+# mdscope dipeptide preset template
+# Tip: execution on/off is controlled only by `analyses.*`
+preset: full
+
+system:
+  topology: ../../data/ace-a-nme/hrex_nowat.pdb
+  trajectory: ../../data/ace-a-nme/hrex_nowat.xtc
+  trajectory_name: ace-x-nme
+  selection: protein
+  align_selection: backbone
+
+frames:
+  start: 0
+  stop: null
+  step: 1
+
+runtime:
+  seed: 42
+  resume: false
+
+output:
+  outdir: results_ace-a-nme
+  figure_formats: [png, pdf]
+  dpi: 300
+
+analyses:
+  rmsd: true
+  rmsf: false
+  dssp: false 
+  pca: true
+  cluster: true
+  representative: true
+  rg: false
+  sasa: true
+  distance: false
+  ramachandran: true
+  convergence: true
+
+plot:
+  publication_style: true
+  timeseries_distribution: true
+  distribution_kind: hist_kde
+  hist_bin_method: fd
+  hist_bins: null
+
+rmsd:
+  map_mode: align
+  selection: backbone
+  align: true
+  align_selection: backbone
+  debug_write_aligned_pdb: true
+  debug_max_frames: 1
+  region_mode: global  # global | ligand_site
+  min_mapped: 1
+  min_coverage: 0.7
+
+pca:
+  mode: project  # project | joint
+  fit_trajectory: ace-a-nme
+  align: true
+  selection: backbone
+  n_components: 10
+  use_pcs: [1, 2, 3, 4, 5]
+  # PC1-PC2 free energy (RT units):
+  free_energy_enabled: true
+  free_energy_bins: auto_fd  # auto_fd or integer
+  free_energy_level_step_rt: 0.2
+  free_energy_smooth_sigma: 1.0
+  free_energy_per_trajectory: false
+
+cluster:
+  method: hdbscan
+  min_cluster_size: 100
+  min_samples: null
+  metric: euclidean
+  selection_method: eom
+  allow_single_cluster: false
+  representative_method: medoid  # medoid | centroid_nearest | random
+  representative_random_n: 1
+  representative_random_seed: 42
+  representative_scope: both  # global | per_trajectory | both
+
+sasa:
+  selection: protein
+  level: residue
+  probe_radius: 1.4
+  n_sphere_points: 960
+  relative: true
+  reference_scale: tien2013
+  rsasa_clip: false
+
+ramachandran:
+  mode: both  # global | per_residue | both
+  selection: protein
+
+convergence:
+  enabled_metrics: [pca, cluster_occupancy]
+  n_blocks: 2
+  min_frames: 500
+  rule: k_of_n  # all_of | k_of_n
+  k_required: 3
+  pca:
+    pcs: [1, 2]
+    jsd_max: 0.15
+  cluster_occupancy:
+    jsd_max: 0.15

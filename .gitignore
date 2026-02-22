@@ -16,7 +16,7 @@ dist/
 # Analysis outputs
 configs/results/
 configs/results_*/
-configs/*.yaml
+#configs/*.yaml
 
 # Matplotlib cache (created under outdir)
 .cache/
@@ -25,3 +25,6 @@ configs/*.yaml
 .DS_Store
 .idea/
 .vscode/
+
+
+*.npz
