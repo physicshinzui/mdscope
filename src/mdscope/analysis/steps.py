@@ -410,6 +410,32 @@ def run_rmsd(ctx: RunContext) -> None:
     pd.DataFrame(mapping_rows).to_csv(dirs["tables"] / "residue_mapping.csv", index=False)
     if cfg.rmsd.export_below_threshold:
         pd.DataFrame(export_rows).to_csv(dirs["tables"] / "rmsd_below_threshold_frames.csv", index=False)
+
+    threshold_summary_rows: list[dict[str, Any]] = []
+    if len(df) > 0:
+        export_df = pd.DataFrame(export_rows) if len(export_rows) > 0 else pd.DataFrame(columns=["trajectory"])
+        for traj_name, sub in df.groupby("trajectory"):
+            vals = sub["rmsd"].dropna()
+            n_eval = int(len(vals))
+            n_below = int((vals <= cfg.rmsd.threshold_angstrom).sum()) if n_eval > 0 else 0
+            frac = float(n_below / n_eval) if n_eval > 0 else float("nan")
+            n_exported = int((export_df["trajectory"] == traj_name).sum()) if "trajectory" in export_df.columns else 0
+            threshold_summary_rows.append(
+                {
+                    "trajectory": str(traj_name),
+                    "threshold_angstrom": float(cfg.rmsd.threshold_angstrom),
+                    "n_frames_evaluated": n_eval,
+                    "n_frames_below_threshold": n_below,
+                    "fraction_below_threshold": frac,
+                    "percent_below_threshold": float(frac * 100.0) if n_eval > 0 else float("nan"),
+                    "export_below_threshold": bool(cfg.rmsd.export_below_threshold),
+                    "n_frames_exported": n_exported,
+                    "max_export_frames": int(cfg.rmsd.max_export_frames),
+                    "export_fraction_among_below": float(n_exported / n_below) if n_below > 0 else float("nan"),
+                }
+            )
+    pd.DataFrame(threshold_summary_rows).to_csv(dirs["tables"] / "rmsd_threshold_summary.csv", index=False)
+
     report = {
         "mapped_pairs": int(len(mapping_rows)),
         "map_mode": cfg.rmsd.map_mode,
@@ -432,6 +458,7 @@ def run_rmsd(ctx: RunContext) -> None:
         "exported_frame_count": len(export_rows),
         "exported_frame_count_by_trajectory": export_count_by_traj,
         "export_dir": str(export_root),
+        "threshold_summary": threshold_summary_rows,
     }
     (dirs["data"] / "mapping_report.json").write_text(json.dumps(report, indent=2))
     _plot_timeseries_and_distribution(cfg, df, "frame", "rmsd", "trajectory", "rmsd", "RMSD")
