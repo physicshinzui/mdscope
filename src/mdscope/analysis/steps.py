@@ -1236,11 +1236,13 @@ def run_cluster(ctx: RunContext) -> None:
     for label, sub in normal.groupby("label"):
         label_i = int(label)
         cluster_name = str(sub["cluster_name"].iloc[0]) if "cluster_name" in sub else ("noise" if label_i == -1 else f"cluster_{label_i}")
+        point_size = 6 if label_i == -1 else 10
+        point_alpha = 0.35 if label_i == -1 else 0.7
         ax.scatter(
             sub["PC1"],
             sub["PC2"],
-            s=10,
-            alpha=0.7,
+            s=point_size,
+            alpha=point_alpha,
             marker="o",
             linewidths=0.0,
             color=color_by_label.get(label_i),
