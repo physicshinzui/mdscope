@@ -45,3 +45,9 @@
 - [ ] Evaluate a template-copy feature such as `init-config --template dipeptide`
 - [ ] Evaluate a `list-templates` CLI command
 - [ ] Split heavy real-data analyses into a separate optional GitHub Actions workflow
+- [ ] Build an interactive PCA explorer GUI (mdscope backend)
+  - Scatter plot (PC space) + 3D structure viewer
+  - Hover: tooltip only (trajectory/frame/PCs/RMSD/cluster)
+  - Click: load and display the corresponding structure frame
+  - Use `pca_scores.csv` as the primary source; join `hdbscan_labels.csv` / `rmsd_vs_reference.csv` when available
+  - Start with a local web app (e.g., Dash + Plotly + py3Dmol)

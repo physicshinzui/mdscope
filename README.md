@@ -19,18 +19,66 @@ Config-first MD trajectory analysis automation tool built on MDAnalysis.
   - `ramachandran`
 - Publication-oriented plotting defaults (multi-format + DPI control)
 
+## Dependencies
+
+### Python dependencies (installed via `pip`)
+
+Core runtime (from `pyproject.toml`):
+
+- `typer`
+- `pydantic`
+- `pyyaml`
+- `MDAnalysis`
+- `numpy`
+- `scipy`
+- `pandas`
+- `matplotlib`
+- `scikit-learn`
+- `biopython`
+- `hdbscan`
+
+Optional Python dependencies:
+
+- `mdakit-sasa` (required for `sasa` step)
+- `pytest`, `ruff`, `build` (development)
+
+### External executables (optional, not installed by pip)
+
+- `fpocket` (required only for `analyses.pocket: true`)
+  - `mdscope` calls the `fpocket` CLI command from `PATH`
+  - verify with:
+
+```bash
+which fpocket
+fpocket -h
+```
+
 ## Installation
 
 ### pip
+
+Core install:
 
 ```bash
 pip install -e .
 ```
 
-SASA support:
+Core + SASA support:
 
 ```bash
 pip install -e '.[sasa]'
+```
+
+Core + development tools:
+
+```bash
+pip install -e '.[dev]'
+```
+
+Core + development + SASA:
+
+```bash
+pip install -e '.[dev,sasa]'
 ```
 
 ### conda (example)
@@ -40,6 +88,15 @@ conda create -n mdscope python=3.11 -y
 conda activate mdscope
 pip install -e '.[dev,sasa]'
 ```
+
+Optional: install `fpocket` in the same environment (if available on your platform)
+
+```bash
+conda install -c conda-forge fpocket
+```
+
+If `conda-forge` does not provide `fpocket` for your platform, install it separately
+(e.g., system package manager / Homebrew) and ensure the `fpocket` command is on `PATH`.
 
 ## Quick Start
 
