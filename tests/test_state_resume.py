@@ -1,10 +1,10 @@
 from pathlib import Path
 
+import mdscope.pipeline as pipeline
 from mdscope.config import AppConfig
-from mdscope.pipeline import run_pipeline
 
 
-def test_resume_skips_done(tmp_path: Path) -> None:
+def test_resume_skips_done(tmp_path: Path, monkeypatch) -> None:
     top = tmp_path / "top.pdb"
     trj = tmp_path / "traj.xtc"
     top.write_text("x")
@@ -18,29 +18,35 @@ def test_resume_skips_done(tmp_path: Path) -> None:
                 "trajectory_names": ["traj0"],
             },
             "output": {"outdir": str(tmp_path / "results")},
+            "analyses": {"rmsd": True},
         }
     )
 
-    run_pipeline(
+    def _noop_execute_step(step: str, ctx) -> None:
+        return None
+
+    monkeypatch.setattr(pipeline, "execute_step", _noop_execute_step)
+
+    pipeline.run_pipeline(
         config=cfg,
         config_text="a",
         resume=False,
         force=False,
-        only={"ligand_site"},
+        only={"rmsd"},
         force_steps=set(),
         from_step=None,
         until_step=None,
     )
 
-    done = Path(cfg.output.outdir) / ".state" / "ligand_site.done"
+    done = Path(cfg.output.outdir) / ".state" / "rmsd.done"
     assert done.exists()
 
-    run_pipeline(
+    pipeline.run_pipeline(
         config=cfg,
         config_text="a",
         resume=True,
         force=False,
-        only={"ligand_site"},
+        only={"rmsd"},
         force_steps=set(),
         from_step=None,
         until_step=None,

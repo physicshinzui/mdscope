@@ -25,7 +25,6 @@ STEPS: list[Step] = [
     Step("representative", ("cluster",), lambda c: c.analyses.representative),
     Step("rg", tuple(), lambda c: c.analyses.rg),
     Step("sasa", tuple(), lambda c: c.analyses.sasa),
-    Step("ligand_site", tuple(), lambda c: c.analyses.ligand_site),
     Step("distance", tuple(), lambda c: c.analyses.distance),
     Step("ramachandran", tuple(), lambda c: c.analyses.ramachandran),
 ]

@@ -21,12 +21,10 @@ output:
   dpi: 300
 analyses:
   dssp: true 
-  ligand_site: false
   sasa: true 
   distance: true
   ramachandran: true 
 rmsd:
-  enabled: true
   reference: ../../data/pdbs/2YXJ.pdb
   map_mode: align
   selection: "name CA"
@@ -44,14 +42,12 @@ rmsd:
   export_selection: "all"
   max_export_frames: 50
 rmsf:
-  enabled: true
   selection: "protein and name CA"
   align: true
   align_to: average      # average | first
   align_selection: "protein and backbone"
 
 pca:
-  enabled: true
   mode: project
   fit_trajectory: WT
   selection: backbone
@@ -70,13 +66,12 @@ pca:
   free_energy_level_step_rt: 0.5
   free_energy_smooth_sigma: 0.5
 cluster:
-  enabled: true
   min_cluster_size: 20
+  allow_single_cluster: true
   representative_method: random
-  representative_random_n: 2
+  representative_random_n: 5
   representative_random_seed: 7
 distance:
-  enabled: true
   pairs:
     - id: ca_45_46
       sel1: "protein and resid 45 and name CA"

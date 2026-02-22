@@ -15,7 +15,6 @@ StepName = Literal[
     "representative",
     "rg",
     "sasa",
-    "ligand_site",
     "distance",
     "ramachandran",
 ]
@@ -227,7 +226,6 @@ class AnalysesConfig(BaseModel):
     representative: bool = True
     rg: bool = True
     sasa: bool = True
-    ligand_site: bool = True
     distance: bool = False
     ramachandran: bool = False
 
@@ -488,7 +486,6 @@ analyses:
   representative: true
   rg: true
   sasa: true
-  ligand_site: false
   distance: true
   ramachandran: true
 

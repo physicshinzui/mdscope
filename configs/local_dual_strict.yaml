@@ -21,13 +21,11 @@ output:
   dpi: 300
 analyses:
   dssp: false
-  ligand_site: false
   sasa: false
   distance: true
   ramachandran: false
 rmsd:
   atom_selection: name CA
-  enabled: true
   reference: ../../data/pdbs/2YXJ.pdb
   map_mode: strict
   alignment_selection: protein and name CA
@@ -39,7 +37,6 @@ rmsd:
   min_mapped: 10
   min_coverage: 0.2
 pca:
-  enabled: true
   mode: project
   fit_trajectory: WT
   selection: backbone
@@ -53,11 +50,9 @@ pca:
   reference_names:
   - xtal_2YXJ
 cluster:
-  enabled: true
   min_cluster_size: 20
   representative_method: medoid
 distance:
-  enabled: true
   pairs:
   - id: ca_45_143
     sel1: protein and resid 45 and name CA

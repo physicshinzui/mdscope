@@ -21,12 +21,10 @@ output:
   dpi: 300
 analyses:
   dssp: false
-  ligand_site: false
   sasa: false
   distance: true
   ramachandran: false
 rmsd:
-  enabled: true
   reference: ../../data/pdbs/2YXJ.pdb
   map_mode: align
   selection: name CA
@@ -40,13 +38,11 @@ rmsd:
   debug_write_aligned_pdb: true
   debug_max_frames: 5
 rmsf:
-  enabled: true
   selection: protein and name CA
   align: true
   align_to: average
   align_selection: protein and backbone
 pca:
-  enabled: true
   mode: project
   fit_trajectory: WT
   selection: backbone
@@ -67,11 +63,9 @@ pca:
   site_align_selection: protein and name CA
   site_map_mode: align
 cluster:
-  enabled: true
   min_cluster_size: 20
   representative_method: medoid
 distance:
-  enabled: true
   pairs:
   - id: ca_45_143
     sel1: protein and resid 45 and name CA

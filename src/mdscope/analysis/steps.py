@@ -1458,7 +1458,6 @@ STEP_HANDLERS = {
     "representative": run_representative,
     "rg": run_rg,
     "sasa": run_sasa,
-    "ligand_site": lambda ctx: run_placeholder(ctx, "ligand_site"),
     "distance": run_distance,
     "ramachandran": run_ramachandran,
 }
