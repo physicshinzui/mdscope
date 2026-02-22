@@ -17,6 +17,7 @@ StepName = Literal[
     "sasa",
     "distance",
     "ramachandran",
+    "convergence",
 ]
 
 
@@ -217,6 +218,36 @@ class RamachandranConfig(BaseModel):
     residues: list[str] = []
 
 
+class Convergence1DConfig(BaseModel):
+    jsd_max: float = 0.08
+
+
+class ConvergencePcaConfig(BaseModel):
+    pcs: list[int] = [1, 2]
+    jsd_max: float = 0.12
+
+
+class ConvergenceClusterConfig(BaseModel):
+    jsd_max: float = 0.15
+
+
+class ConvergenceConfig(BaseModel):
+    enabled_metrics: list[Literal["rmsd", "rg", "pca", "cluster_occupancy"]] = [
+        "rmsd",
+        "rg",
+        "pca",
+        "cluster_occupancy",
+    ]
+    n_blocks: int = 5
+    min_frames: int = 500
+    rule: Literal["all_of", "k_of_n"] = "k_of_n"
+    k_required: int = 3
+    rmsd: Convergence1DConfig = Convergence1DConfig()
+    rg: Convergence1DConfig = Convergence1DConfig(jsd_max=0.06)
+    pca: ConvergencePcaConfig = ConvergencePcaConfig()
+    cluster_occupancy: ConvergenceClusterConfig = ConvergenceClusterConfig()
+
+
 class AnalysesConfig(BaseModel):
     rmsd: bool = True
     rmsf: bool = True
@@ -228,6 +259,7 @@ class AnalysesConfig(BaseModel):
     sasa: bool = True
     distance: bool = False
     ramachandran: bool = False
+    convergence: bool = False
 
 
 class AppConfig(BaseModel):
@@ -246,6 +278,7 @@ class AppConfig(BaseModel):
     plot: PlotConfig = PlotConfig()
     distance: DistanceConfig = DistanceConfig()
     ramachandran: RamachandranConfig = RamachandranConfig()
+    convergence: ConvergenceConfig = ConvergenceConfig()
 
     @model_validator(mode="after")
     def validate_modes(self) -> "AppConfig":
@@ -265,6 +298,7 @@ PRESETS: dict[str, dict] = {
         "analyses": {
             "distance": True,
             "ramachandran": True,
+            "convergence": True,
         }
     },
 }
@@ -438,6 +472,17 @@ def generate_template(preset: str = "standard") -> str:
             ],
         },
         "ramachandran": {"mode": "both", "selection": "protein", "residues": ["A:45", "A:143"]},
+        "convergence": {
+            "enabled_metrics": ["rmsd", "rg", "pca", "cluster_occupancy"],
+            "n_blocks": 5,
+            "min_frames": 500,
+            "rule": "k_of_n",
+            "k_required": 3,
+            "rmsd": {"jsd_max": 0.08},
+            "rg": {"jsd_max": 0.06},
+            "pca": {"pcs": [1, 2], "jsd_max": 0.12},
+            "cluster_occupancy": {"jsd_max": 0.15},
+        },
     }
     merged = apply_preset(base)
     return yaml.safe_dump(merged, sort_keys=False, allow_unicode=False)
@@ -488,6 +533,7 @@ analyses:
   sasa: true
   distance: true
   ramachandran: true
+  convergence: true
 
 plot:
   publication_style: true
@@ -583,4 +629,20 @@ ramachandran:
   mode: both  # global | per_residue | both
   selection: protein
   residues: [A:45, A:143]
+
+convergence:
+  enabled_metrics: [rmsd, rg, pca, cluster_occupancy]
+  n_blocks: 5
+  min_frames: 500
+  rule: k_of_n  # all_of | k_of_n
+  k_required: 3
+  rmsd:
+    jsd_max: 0.08
+  rg:
+    jsd_max: 0.06
+  pca:
+    pcs: [1, 2]
+    jsd_max: 0.12
+  cluster_occupancy:
+    jsd_max: 0.15
 """
