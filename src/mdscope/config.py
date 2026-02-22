@@ -18,6 +18,7 @@ StepName = Literal[
     "distance",
     "ramachandran",
     "convergence",
+    "pocket",
 ]
 
 
@@ -248,6 +249,19 @@ class ConvergenceConfig(BaseModel):
     cluster_occupancy: ConvergenceClusterConfig = ConvergenceClusterConfig()
 
 
+class PocketConfig(BaseModel):
+    backend: Literal["fpocket"] = "fpocket"
+    input_mode: Literal["explicit_pdbs", "representatives"] = "representatives"
+    source_dir: Path | None = None
+    pdb_glob: str = "*.pdb"
+    top_n_pockets: int = 5
+    max_structures: int = 200
+    rank_by: Literal["score", "druggability_score", "volume"] = "score"
+    run_dir: str = "pocket_runs"
+    keep_raw_outputs: bool = True
+    fail_on_missing_fpocket: bool = True
+
+
 class AnalysesConfig(BaseModel):
     rmsd: bool = True
     rmsf: bool = True
@@ -260,6 +274,7 @@ class AnalysesConfig(BaseModel):
     distance: bool = False
     ramachandran: bool = False
     convergence: bool = False
+    pocket: bool = False
 
 
 class AppConfig(BaseModel):
@@ -279,6 +294,7 @@ class AppConfig(BaseModel):
     distance: DistanceConfig = DistanceConfig()
     ramachandran: RamachandranConfig = RamachandranConfig()
     convergence: ConvergenceConfig = ConvergenceConfig()
+    pocket: PocketConfig = PocketConfig()
 
     @model_validator(mode="after")
     def validate_modes(self) -> "AppConfig":
@@ -299,6 +315,7 @@ PRESETS: dict[str, dict] = {
             "distance": True,
             "ramachandran": True,
             "convergence": True,
+            "pocket": True,
         }
     },
 }
@@ -348,6 +365,8 @@ def load_config(config_path: Path) -> AppConfig:
         cfg.pca.site_reference_pdb = _resolve(base_dir, cfg.pca.site_reference_pdb)
     if cfg.pca.site_map_file:
         cfg.pca.site_map_file = _resolve(base_dir, cfg.pca.site_map_file)
+    if cfg.pocket.source_dir:
+        cfg.pocket.source_dir = _resolve(base_dir, cfg.pocket.source_dir)
 
     missing = []
     if cfg.system.topology and not cfg.system.topology.exists():
@@ -367,6 +386,8 @@ def load_config(config_path: Path) -> AppConfig:
         missing.append(str(cfg.pca.site_reference_pdb))
     if cfg.pca.site_map_file and not cfg.pca.site_map_file.exists():
         missing.append(str(cfg.pca.site_map_file))
+    if cfg.pocket.input_mode == "explicit_pdbs" and cfg.pocket.source_dir and not cfg.pocket.source_dir.exists():
+        missing.append(str(cfg.pocket.source_dir))
     if missing:
         joined = ", ".join(missing)
         raise ValueError(f"Input files not found: {joined}")
@@ -483,6 +504,18 @@ def generate_template(preset: str = "standard") -> str:
             "pca": {"pcs": [1, 2], "jsd_max": 0.12},
             "cluster_occupancy": {"jsd_max": 0.15},
         },
+        "pocket": {
+            "backend": "fpocket",
+            "input_mode": "representatives",
+            "source_dir": None,
+            "pdb_glob": "*.pdb",
+            "top_n_pockets": 5,
+            "max_structures": 200,
+            "rank_by": "score",
+            "run_dir": "pocket_runs",
+            "keep_raw_outputs": True,
+            "fail_on_missing_fpocket": True,
+        },
     }
     merged = apply_preset(base)
     return yaml.safe_dump(merged, sort_keys=False, allow_unicode=False)
@@ -548,6 +581,7 @@ analyses:
   distance: true
   ramachandran: true
   convergence: true
+  pocket: true
 
 plot:
   # Apply shared "publication-like" matplotlib style.
@@ -734,4 +768,25 @@ convergence:
   cluster_occupancy:
     # JSD divergence threshold for HDBSCAN cluster occupancy vectors.
     jsd_max: 0.15
+
+pocket:
+  # External pocket detector backend (phase 1 supports fpocket only).
+  backend: fpocket
+  # representatives = use mdscope representative PDBs, explicit_pdbs = scan a directory of PDBs.
+  input_mode: representatives  # explicit_pdbs | representatives
+  # Used only when input_mode=explicit_pdbs.
+  source_dir: null
+  pdb_glob: "*.pdb"
+  # Keep only top N pockets per structure in top-hits summary.
+  top_n_pockets: 5
+  # Safety cap on number of input structures.
+  max_structures: 200
+  # Ranking key for top-hits summary.
+  rank_by: score  # score | druggability_score | volume
+  # Subdirectory under outdir where raw fpocket runs are stored.
+  run_dir: pocket_runs
+  # Keep raw fpocket outputs after parsing.
+  keep_raw_outputs: true
+  # If false, missing fpocket executable is reported in status and step continues.
+  fail_on_missing_fpocket: true
 """
