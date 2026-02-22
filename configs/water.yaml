@@ -1,0 +1,198 @@
+# mdscope full preset template
+# Tip: execution on/off is controlled only by `analyses.*`
+# Tip: values shown here are examples; adjust selections and thresholds to your system.
+preset: full
+
+system:
+  # Shared topology used for all trajectories (choose this OR `topologies` below).
+  topology: ../../data/ace-a-nme/ace-A-nme.gro
+  # One or more trajectory files (XTC/DCD/...); order must match trajectory_names/topologies.
+  trajectories:
+    - ../../data/ace-a-nme/hrex_water.xtc
+  # Display names used in tables/plots.
+  trajectory_names: [run1]
+  # Default atom selection used by analyses that rely on `system.selection` (currently mainly Rg).
+  selection: protein
+  # Default alignment selection used by analyses that rely on `system.align_selection` (mainly PCA pre-alignment).
+  align_selection: backbone
+
+frames:
+  # Frame slicing applied to most analyses (Python slice semantics: start:stop:step).
+  start: 0
+  # null means "until the end of the trajectory".
+  stop: null
+  # Use >1 for faster exploratory runs.
+  step: 1
+
+runtime:
+  # Random seed used where stochastic steps exist (e.g., random representative sampling).
+  seed: 42
+  # If true, skip steps with matching .state/*.done checkpoints.
+  resume: false
+
+output:
+  # Base output directory for all generated files.
+  outdir: results_water
+  # Multi-format figure export. png uses `dpi`; vector formats ignore dpi.
+  figure_formats: [png, pdf]
+  # Raster DPI for PNG export.
+  dpi: 300
+
+analyses:
+  # Master on/off switches for pipeline steps. Dependencies may still run when required.
+  rmsd: false
+  rmsf: false
+  dssp: false
+  pca: true
+  cluster: true
+  representative: true
+  rg: false
+  sasa: false 
+  distance: false
+  ramachandran: true
+  convergence: true
+  pocket: false
+  water: true
+
+plot:
+  # Apply shared "publication-like" matplotlib style.
+  publication_style: true
+  # If true, also save distribution plots for time-series metrics (RMSD/Rg/SASA etc.).
+  timeseries_distribution: true
+  # Distribution panel style: hist | kde | hist_kde | violin (where implemented).
+  distribution_kind: hist_kde
+  # Histogram binning rule when hist_bins is null: fd | sturges | sqrt | auto.
+  hist_bin_method: fd
+  # Override histogram bin count (null = auto by hist_bin_method).
+  hist_bins: null
+
+pca:
+  # project = fit PCA on one trajectory then project others; joint = fit on concatenated trajectories.
+  mode: project  # project | joint
+  # Trajectory name used as PCA fit source in project mode; also alignment reference trajectory when pca.align=true.
+  fit_trajectory: run1
+  # Align trajectories before collecting PCA coordinates.
+  align: true
+  # Atom selection flattened into PCA input vectors.
+  selection: backbone
+  # Maximum principal components to compute.
+  n_components: 10
+  # Components used downstream for clustering (1-based indexing in config).
+  use_pcs: [1, 2, 3, 4, 5]
+  # PC1-PC2 free energy (RT units):
+  free_energy_enabled: true
+  # 2D histogram bins for free-energy map; use auto_fd for Freedman-Diaconis binning.
+  free_energy_bins: auto_fd  # auto_fd or integer
+  # Contour interval in RT units.
+  free_energy_level_step_rt: 1.0
+  # Gaussian smoothing sigma in histogram-bin units (0 = no smoothing).
+  free_energy_smooth_sigma: 2.0
+  # If true, also write per-trajectory free-energy maps in addition to combined map.
+  free_energy_per_trajectory: false
+
+cluster:
+  # Clustering is performed on PCA scores (selected PCs via pca.use_pcs).
+  method: hdbscan
+  # HDBSCAN core hyperparameter: minimum cluster size.
+  min_cluster_size: 100
+  # HDBSCAN min_samples (null = library default / fallback behavior in code).
+  min_samples: null
+  # Distance metric in PCA score space.
+  metric: euclidean
+  # HDBSCAN cluster selection method.
+  selection_method: eom
+  # If true, allow a single cluster result instead of all-noise in weakly separated data.
+  allow_single_cluster: false
+  # Representative extraction strategy for each cluster.
+  representative_method: medoid  # medoid | centroid_nearest | random
+  # Number of random samples per cluster when representative_method=random.
+  representative_random_n: 1
+  # RNG seed for random representative sampling.
+  representative_random_seed: 42
+  # Output representative structures globally / per trajectory / both.
+  representative_scope: both  # global | per_trajectory | both
+
+sasa:
+  # Atom selection for SASA calculation.
+  selection: protein
+  # Output granularity: atom | residue.
+  level: residue
+  # Solvent probe radius in angstrom (water ~1.4 A).
+  probe_radius: 1.4
+  # Surface point density used by mdakit-sasa (higher = slower, smoother).
+  n_sphere_points: 960
+  # If true, report relative SASA (rSASA) using reference_scale.
+  relative: true
+  # Reference maximum ASA scale for rSASA normalization.
+  reference_scale: tien2013
+  # If true, clip rSASA values to [0, 1].
+  rsasa_clip: false
+
+ramachandran:
+  # global = combined plot, per_residue = one plot per residue, both = both outputs.
+  mode: both  # global | per_residue | both
+  # Residue selection used for phi/psi extraction (usually protein).
+  selection: protein
+  # Optional explicit subset for per-residue outputs; format examples: A:10, B:20.
+  residues: [A:10, A:20]
+
+convergence:
+  # Metrics used for convergence decision. Inputs are read from existing output CSVs.
+  enabled_metrics: [rmsd, rg, pca, cluster_occupancy]
+  # Number of time blocks used for within-trajectory stability checks.
+  n_blocks: 5
+  # Minimum frames required per trajectory per metric; shorter series fail that metric.
+  min_frames: 500
+  # all_of = all enabled metrics must pass; k_of_n = at least k_required metrics must pass.
+  rule: k_of_n  # all_of | k_of_n
+  # Used only when rule=k_of_n.
+  k_required: 3
+  rmsd:
+    # JSD divergence threshold (base=2, computed as distance^2).
+    jsd_max: 0.08
+  rg:
+    # JSD divergence threshold for Rg distribution stability/agreement.
+    jsd_max: 0.06
+  pca:
+    # PCA components (1-based) used for 2D JSD convergence check (first two values are used as x/y).
+    pcs: [1, 2]
+    # JSD divergence threshold for PC-space 2D histogram distributions.
+    jsd_max: 0.12
+  cluster_occupancy:
+    # JSD divergence threshold for HDBSCAN cluster occupancy vectors.
+    jsd_max: 0.15
+
+water:
+  # Water analyses enabled in this step: occupancy (nearby count), rdf (g(r)), residence (contiguous stays).
+  enabled_metrics: [occupancy, rdf, residence]
+  # Selection for water residues. Adapt names to your system (HOH/WAT/SOL/TIP3...).
+  water_selection: resname SOL or resname HOH or resname WAT
+  # Selection for water oxygen atoms within water_selection.
+  oxygen_selection: name O or name OW or name OH2
+  # Region definition mode for occupancy/residence. Phase 1 supports selection mode.
+  region_mode: selection  # selection | ligand_site
+  # Region atom selection used for water proximity metrics.
+  region_selection: protein and name CA
+  # Placeholder for future ligand_site mode support.
+#  ligand_selection: resname LIG
+  # Distance cutoff (angstrom) to count water as near the region.
+  cutoff_angstrom: 5.0
+  occupancy:
+    # oxygen_atoms = raw oxygen count, water_residues = unique waters by residue.
+    count_mode: water_residues  # oxygen_atoms | water_residues
+    # If true, also write occupancy block summaries (using convergence.n_blocks).
+    block_summary: true
+  rdf:
+    # Solute selection for RDF against water oxygens.
+    solute_selection: protein
+    # RDF distance range [min, max] in angstrom.
+    range_angstrom: [0.0, 12.0]
+    # Number of RDF bins.
+    nbins: 120
+  residence:
+    # Minimum contiguous stay length (frames) included in outputs.
+    min_stay_frames: 1
+    # Allowed exit gap (frames) before splitting an event; Phase 1 uses 0 only.
+    gap_tolerance_frames: 0
+    # Number of top waters (by total residence frames) kept in summary.
+    report_top_waters: 20

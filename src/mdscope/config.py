@@ -403,7 +403,8 @@ def load_yaml(path: Path) -> dict:
 def apply_preset(config: dict) -> dict:
     preset = config.get("preset", "standard")
     preset_overrides = PRESETS.get(preset, {})
-    return deep_merge(config, preset_overrides)
+    # Preset provides defaults; explicit user config must win.
+    return deep_merge(preset_overrides, config)
 
 
 def load_config(config_path: Path) -> AppConfig:
