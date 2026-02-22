@@ -119,8 +119,8 @@ class PcaConfig(BaseModel):
     site_map_file: Path | None = None
     free_energy_enabled: bool = True
     free_energy_bins: int | Literal["auto_fd"] = "auto_fd"
-    free_energy_level_step_rt: float = 0.2
-    free_energy_smooth_sigma: float = 1.0
+    free_energy_level_step_rt: float = 1.0
+    free_energy_smooth_sigma: float = 2.0
     free_energy_per_trajectory: bool = False
 
     @field_validator("free_energy_bins")
@@ -435,8 +435,8 @@ def generate_template(preset: str = "standard") -> str:
             "reference_names": ["reference_1"],
             "free_energy_enabled": True,
             "free_energy_bins": "auto_fd",
-            "free_energy_level_step_rt": 0.2,
-            "free_energy_smooth_sigma": 1.0,
+            "free_energy_level_step_rt": 1.0,
+            "free_energy_smooth_sigma": 2.0,
             "free_energy_per_trajectory": False,
             "site_from_reference_ligand": False,
             "site_reference_pdb": "../data/reference/reference.pdb",
@@ -628,9 +628,9 @@ pca:
   # 2D histogram bins for free-energy map; use auto_fd for Freedman-Diaconis binning.
   free_energy_bins: auto_fd  # auto_fd or integer
   # Contour interval in RT units.
-  free_energy_level_step_rt: 0.2
+  free_energy_level_step_rt: 1.0
   # Gaussian smoothing sigma in histogram-bin units (0 = no smoothing).
-  free_energy_smooth_sigma: 1.0
+  free_energy_smooth_sigma: 2.0
   # If true, also write per-trajectory free-energy maps in addition to combined map.
   free_energy_per_trajectory: false
   # Ligand-site PCA (optional):

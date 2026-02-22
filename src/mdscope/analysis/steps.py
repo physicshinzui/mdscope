@@ -1470,6 +1470,71 @@ def run_convergence(ctx: RunContext) -> None:
     (dirs["data"] / "convergence_report.json").write_text(json.dumps(report, indent=2))
 
 
+def _dssp_precheck_diagnostics(ag: Any, selection: str) -> dict[str, Any]:
+    from collections import Counter
+
+    residue_issues: list[dict[str, Any]] = []
+    total_counts = Counter(str(a.name) for a in ag)
+    required = ["N", "CA", "C", "O"]
+
+    for res in ag.residues:
+        names = [str(a.name) for a in res.atoms]
+        core_counts = {name: int(names.count(name)) for name in required}
+        if tuple(core_counts[k] for k in required) == (1, 1, 1, 1):
+            continue
+        issue = {
+            "resname": str(res.resname),
+            "resid": int(res.resid),
+            "chain": (str(getattr(res, "segid", "")).strip() or "A"),
+            "required_counts": core_counts,
+            "atom_names": names,
+        }
+        missing = [k for k in required if core_counts[k] == 0]
+        if missing:
+            issue["missing"] = missing
+        extras = [n for n in names if n.startswith("OC")]
+        if extras:
+            issue["terminal_oxygen_like_atoms"] = sorted(set(extras))
+        residue_issues.append(issue)
+
+    return {
+        "selection": selection,
+        "selected_atoms": int(len(ag)),
+        "selected_residues": int(len(ag.residues)),
+        "required_name_counts": {k: int(total_counts.get(k, 0)) for k in required},
+        "residue_issues": residue_issues,
+    }
+
+
+def _raise_dssp_precheck_error(traj_name: str, diag: dict[str, Any], out_path: Path) -> None:
+    out_path.write_text(json.dumps(diag, indent=2))
+    counts = diag["required_name_counts"]
+    issues = diag["residue_issues"]
+    lines = [
+        f"DSSP precheck failed for {traj_name}: unequal backbone atom counts in selection '{diag['selection']}'",
+        f"Counts: N={counts['N']}, CA={counts['CA']}, C={counts['C']}, O={counts['O']}",
+        f"Problem residues (showing up to 5 of {len(issues)}):",
+    ]
+    for item in issues[:5]:
+        missing = ",".join(item.get("missing", [])) if item.get("missing") else "none"
+        term = item.get("terminal_oxygen_like_atoms")
+        suffix = f"; terminal-like oxygens={term}" if term else ""
+        lines.append(
+            f"- {item['resname']} {item['resid']} (chain {item['chain']}): "
+            f"required={item['required_counts']}, missing={missing}{suffix}"
+        )
+    lines.extend(
+        [
+            "Likely cause: terminal or nonstandard residues in DSSP selection (e.g., OC1/OC2 instead of O).",
+            "Suggestions:",
+            "- Exclude terminal/problem residues in dssp.selection (e.g., 'backbone and not resid <Cterm>').",
+            "- Or preprocess topology atom names to standard backbone naming (N, CA, C, O).",
+            f"- Diagnostic JSON written to: {out_path}",
+        ]
+    )
+    raise RuntimeError("\n".join(lines))
+
+
 def run_dssp(ctx: RunContext) -> None:
     _, np, pd, plt = _imports()
     from matplotlib.colors import BoundaryNorm, ListedColormap
@@ -1495,6 +1560,10 @@ def run_dssp(ctx: RunContext) -> None:
         ag = u.select_atoms(cfg.dssp.selection)
         if len(ag) == 0:
             continue
+        diag = _dssp_precheck_diagnostics(ag, cfg.dssp.selection)
+        counts = diag["required_name_counts"]
+        if len(diag["residue_issues"]) > 0 or len({counts["N"], counts["CA"], counts["C"], counts["O"]}) != 1:
+            _raise_dssp_precheck_error(traj_name, diag, dirs["data"] / f"dssp_selection_diagnostics_{traj_name}.json")
 
         frame_numbers = [int(ts.frame) for ts in u.trajectory[_frame_slice(cfg)]]
         dssp = DSSP(ag).run(start=cfg.frames.start, stop=cfg.frames.stop, step=cfg.frames.step)
