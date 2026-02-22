@@ -387,9 +387,9 @@ def generate_template(preset: str = "standard") -> str:
     base = {
         "preset": preset,
         "system": {
-            "topology": "../data/WT/topology.pdb",
-            "trajectories": ["../data/WT/samples.xtc", "../data/F143W/samples.xtc"],
-            "trajectory_names": ["WT", "F143W"],
+            "topology": "../data/system/topology.pdb",
+            "trajectories": ["../data/system/run1.xtc", "../data/system/run2.xtc"],
+            "trajectory_names": ["run1", "run2"],
             "selection": "protein",
             "align_selection": "backbone",
         },
@@ -404,7 +404,7 @@ def generate_template(preset: str = "standard") -> str:
             "hist_bins": None,
         },
         "rmsd": {
-            "reference": "../data/pdbs/2YXJ.pdb",
+            "reference": "../data/reference/reference.pdb",
             "map_mode": "align",
             "selection": "name CA",
             "align": True,
@@ -427,20 +427,20 @@ def generate_template(preset: str = "standard") -> str:
         },
         "pca": {
             "mode": "project",
-            "fit_trajectory": "WT",
+            "fit_trajectory": "run1",
             "align": True,
             "n_components": 10,
             "use_pcs": [1, 2, 3, 4, 5],
-            "reference_pdbs": ["../data/pdbs/2YXJ.pdb"],
-            "reference_names": ["xtal_2YXJ"],
+            "reference_pdbs": ["../data/reference/reference.pdb"],
+            "reference_names": ["reference_1"],
             "free_energy_enabled": True,
             "free_energy_bins": "auto_fd",
             "free_energy_level_step_rt": 0.2,
             "free_energy_smooth_sigma": 1.0,
             "free_energy_per_trajectory": False,
             "site_from_reference_ligand": False,
-            "site_reference_pdb": "../data/pdbs/2YXJ.pdb",
-            "site_ligand_selection": "resname N3C",
+            "site_reference_pdb": "../data/reference/reference.pdb",
+            "site_ligand_selection": "resname LIG",
             "site_cutoff": 5.0,
             "site_atom_selection": "name CA",
             "site_align_selection": "protein and name CA",
@@ -465,13 +465,13 @@ def generate_template(preset: str = "standard") -> str:
         "distance": {
             "pairs": [
                 {
-                    "id": "active_site",
-                    "sel1": "segid A and resid 45 and name CA",
-                    "sel2": "segid A and resid 143 and name CA",
+                    "id": "pair_1",
+                    "sel1": "segid A and resid 10 and name CA",
+                    "sel2": "segid A and resid 20 and name CA",
                 }
             ],
         },
-        "ramachandran": {"mode": "both", "selection": "protein", "residues": ["A:45", "A:143"]},
+        "ramachandran": {"mode": "both", "selection": "protein", "residues": ["A:10", "A:20"]},
         "convergence": {
             "enabled_metrics": ["rmsd", "rg", "pca", "cluster_occupancy"],
             "n_blocks": 5,
@@ -496,18 +496,18 @@ preset: full
 
 system:
   # Shared topology used for all trajectories (choose this OR `topologies` below).
-  topology: ../data/WT/topology.pdb
+  topology: ../data/system/topology.pdb
   # Per-trajectory topologies (same length/order as `trajectories`).
   # topologies:
-  #   - ../data/WT/topology.pdb
-  #   - ../data/F143W/topology.pdb
+  #   - ../data/system/run1_topology.pdb
+  #   - ../data/system/run2_topology.pdb
   topologies: null
   # One or more trajectory files (XTC/DCD/...); order must match trajectory_names/topologies.
   trajectories:
-    - ../data/WT/samples.xtc
-    - ../data/F143W/samples.xtc
+    - ../data/system/run1.xtc
+    - ../data/system/run2.xtc
   # Display names used in tables/plots.
-  trajectory_names: [WT, F143W]
+  trajectory_names: [run1, run2]
   # Default atom selection used by analyses that rely on `system.selection` (currently mainly Rg).
   selection: protein
   # Default alignment selection used by analyses that rely on `system.align_selection` (mainly PCA pre-alignment).
@@ -563,7 +563,7 @@ plot:
 
 rmsd:
   # External reference structure (PDB/MAE readable by MDAnalysis). If null, first trajectory topology is used.
-  reference: ../data/pdbs/2YXJ.pdb
+  reference: ../data/reference/reference.pdb
   # Residue mapping strategy between trajectory and reference: strict | align | user_map.
   map_mode: align
   map_file: null  # required when map_mode: user_map
@@ -610,7 +610,7 @@ pca:
   # project = fit PCA on one trajectory then project others; joint = fit on concatenated trajectories.
   mode: project  # project | joint
   # Trajectory name used as PCA fit source in project mode; also alignment reference trajectory when pca.align=true.
-  fit_trajectory: WT
+  fit_trajectory: run1
   # Align trajectories before collecting PCA coordinates.
   align: true
   # Atom selection flattened into PCA input vectors.
@@ -620,9 +620,9 @@ pca:
   # Components used downstream for clustering (1-based indexing in config).
   use_pcs: [1, 2, 3, 4, 5]
   # Optional static structures to project into PCA space and mark on plots.
-  reference_pdbs: [../data/pdbs/2YXJ.pdb]
+  reference_pdbs: [../data/reference/reference.pdb]
   # Labels for `reference_pdbs` (same length and order).
-  reference_names: [xtal_2YXJ]
+  reference_names: [reference_1]
   # PC1-PC2 free energy (RT units):
   free_energy_enabled: true
   # 2D histogram bins for free-energy map; use auto_fd for Freedman-Diaconis binning.
@@ -637,9 +637,9 @@ pca:
   # If true, define PCA atom set from residues near a ligand in a reference structure, then map to each trajectory.
   site_from_reference_ligand: false
   # Reference PDB used to define ligand-site residues for PCA.
-  site_reference_pdb: ../data/pdbs/2YXJ.pdb
+  site_reference_pdb: ../data/reference/reference.pdb
   # Ligand selection in the PCA site reference.
-  site_ligand_selection: resname N3C
+  site_ligand_selection: resname LIG
   # Ligand-site residue cutoff in angstrom.
   site_cutoff: 5.0
   # Atom selection within mapped site residues used as PCA coordinates.
@@ -696,18 +696,18 @@ dssp:
 distance:
   # Empty list is allowed.
   pairs:
-    - id: active_site
+    - id: pair_1
       # Any valid MDAnalysis selection strings are allowed.
-      sel1: segid A and resid 45 and name CA
-      sel2: segid A and resid 143 and name CA
+      sel1: segid A and resid 10 and name CA
+      sel2: segid A and resid 20 and name CA
 
 ramachandran:
   # global = combined plot, per_residue = one plot per residue, both = both outputs.
   mode: both  # global | per_residue | both
   # Residue selection used for phi/psi extraction (usually protein).
   selection: protein
-  # Optional explicit subset for per-residue outputs; format examples: A:45, B:143.
-  residues: [A:45, A:143]
+  # Optional explicit subset for per-residue outputs; format examples: A:10, B:20.
+  residues: [A:10, A:20]
 
 convergence:
   # Metrics used for convergence decision. Inputs are read from existing output CSVs.
