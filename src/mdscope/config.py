@@ -19,6 +19,7 @@ StepName = Literal[
     "ramachandran",
     "convergence",
     "pocket",
+    "water",
 ]
 
 
@@ -203,6 +204,67 @@ class PlotConfig(BaseModel):
     hist_bins: int | None = None
 
 
+class WaterOccupancyConfig(BaseModel):
+    count_mode: Literal["oxygen_atoms", "water_residues"] = "water_residues"
+    block_summary: bool = True
+
+
+class WaterRdfConfig(BaseModel):
+    solute_selection: str = "protein"
+    range_angstrom: list[float] = [0.0, 12.0]
+    nbins: int = 120
+
+    @field_validator("range_angstrom")
+    @classmethod
+    def validate_range_angstrom(cls, value: list[float]) -> list[float]:
+        if len(value) != 2:
+            raise ValueError("water.rdf.range_angstrom must have exactly 2 values [min, max]")
+        rmin, rmax = float(value[0]), float(value[1])
+        if rmin < 0 or rmax <= rmin:
+            raise ValueError("water.rdf.range_angstrom must satisfy 0 <= min < max")
+        return [rmin, rmax]
+
+    @field_validator("nbins")
+    @classmethod
+    def validate_nbins(cls, value: int) -> int:
+        if value < 10 or value > 5000:
+            raise ValueError("water.rdf.nbins must be in [10, 5000]")
+        return value
+
+
+class WaterResidenceConfig(BaseModel):
+    min_stay_frames: int = 1
+    gap_tolerance_frames: int = 0
+    report_top_waters: int = 20
+
+    @field_validator("min_stay_frames", "gap_tolerance_frames", "report_top_waters")
+    @classmethod
+    def validate_non_negative(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("water residence parameters must be >= 0")
+        return value
+
+
+class WaterConfig(BaseModel):
+    enabled_metrics: list[Literal["occupancy", "rdf", "residence"]] = ["occupancy", "rdf", "residence"]
+    water_selection: str = "resname SOL or resname HOH or resname WAT"
+    oxygen_selection: str = "name O or name OW or name OH2"
+    region_mode: Literal["selection", "ligand_site"] = "selection"
+    region_selection: str = "protein"
+    ligand_selection: str | None = None
+    cutoff_angstrom: float = 5.0
+    occupancy: WaterOccupancyConfig = WaterOccupancyConfig()
+    rdf: WaterRdfConfig = WaterRdfConfig()
+    residence: WaterResidenceConfig = WaterResidenceConfig()
+
+    @field_validator("cutoff_angstrom")
+    @classmethod
+    def validate_cutoff_angstrom(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("water.cutoff_angstrom must be > 0")
+        return value
+
+
 class DistanceItem(BaseModel):
     id: str
     sel1: str
@@ -275,6 +337,7 @@ class AnalysesConfig(BaseModel):
     ramachandran: bool = False
     convergence: bool = False
     pocket: bool = False
+    water: bool = False
 
 
 class AppConfig(BaseModel):
@@ -295,6 +358,7 @@ class AppConfig(BaseModel):
     ramachandran: RamachandranConfig = RamachandranConfig()
     convergence: ConvergenceConfig = ConvergenceConfig()
     pocket: PocketConfig = PocketConfig()
+    water: WaterConfig = WaterConfig()
 
     @model_validator(mode="after")
     def validate_modes(self) -> "AppConfig":
@@ -316,6 +380,7 @@ PRESETS: dict[str, dict] = {
             "ramachandran": True,
             "convergence": True,
             "pocket": True,
+            "water": True,
         }
     },
 }
@@ -516,6 +581,18 @@ def generate_template(preset: str = "standard") -> str:
             "keep_raw_outputs": True,
             "fail_on_missing_fpocket": True,
         },
+        "water": {
+            "enabled_metrics": ["occupancy", "rdf", "residence"],
+            "water_selection": "resname SOL or resname HOH or resname WAT",
+            "oxygen_selection": "name O or name OW or name OH2",
+            "region_mode": "selection",
+            "region_selection": "protein and name CA",
+            "ligand_selection": "resname LIG",
+            "cutoff_angstrom": 5.0,
+            "occupancy": {"count_mode": "water_residues", "block_summary": True},
+            "rdf": {"solute_selection": "protein", "range_angstrom": [0.0, 12.0], "nbins": 120},
+            "residence": {"min_stay_frames": 1, "gap_tolerance_frames": 0, "report_top_waters": 20},
+        },
     }
     merged = apply_preset(base)
     return yaml.safe_dump(merged, sort_keys=False, allow_unicode=False)
@@ -582,6 +659,7 @@ analyses:
   ramachandran: true
   convergence: true
   pocket: true
+  water: true
 
 plot:
   # Apply shared "publication-like" matplotlib style.
@@ -789,4 +867,39 @@ pocket:
   keep_raw_outputs: true
   # If false, missing fpocket executable is reported in status and step continues.
   fail_on_missing_fpocket: true
+
+water:
+  # Water analyses enabled in this step: occupancy (nearby count), rdf (g(r)), residence (contiguous stays).
+  enabled_metrics: [occupancy, rdf, residence]
+  # Selection for water residues. Adapt names to your system (HOH/WAT/SOL/TIP3...).
+  water_selection: resname SOL or resname HOH or resname WAT
+  # Selection for water oxygen atoms within water_selection.
+  oxygen_selection: name O or name OW or name OH2
+  # Region definition mode for occupancy/residence. Phase 1 supports selection mode.
+  region_mode: selection  # selection | ligand_site
+  # Region atom selection used for water proximity metrics.
+  region_selection: protein and name CA
+  # Placeholder for future ligand_site mode support.
+  ligand_selection: resname LIG
+  # Distance cutoff (angstrom) to count water as near the region.
+  cutoff_angstrom: 5.0
+  occupancy:
+    # oxygen_atoms = raw oxygen count, water_residues = unique waters by residue.
+    count_mode: water_residues  # oxygen_atoms | water_residues
+    # If true, also write occupancy block summaries (using convergence.n_blocks).
+    block_summary: true
+  rdf:
+    # Solute selection for RDF against water oxygens.
+    solute_selection: protein
+    # RDF distance range [min, max] in angstrom.
+    range_angstrom: [0.0, 12.0]
+    # Number of RDF bins.
+    nbins: 120
+  residence:
+    # Minimum contiguous stay length (frames) included in outputs.
+    min_stay_frames: 1
+    # Allowed exit gap (frames) before splitting an event; Phase 1 uses 0 only.
+    gap_tolerance_frames: 0
+    # Number of top waters (by total residence frames) kept in summary.
+    report_top_waters: 20
 """
