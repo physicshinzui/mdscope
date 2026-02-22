@@ -46,7 +46,7 @@ rmsd:
   min_coverage: 0.2
   # extract pdbs below a threshold
   export_below_threshold: true
-  threshold_angstrom: 1.5
+  threshold_angstrom: 1.0
   export_selection: "all"
   max_export_frames: 50
 
@@ -65,7 +65,7 @@ pca:
   reference_pdbs:
   - ../../data/pdbs/2YXJ.pdb
   reference_names:
-  - 5awl
+  - 2yxj
   free_energy_enabled: true
   free_energy_bins: auto_fd
   free_energy_level_step_rt: 1.0
@@ -83,6 +83,16 @@ cluster:
   min_cluster_size: 10
   representative_method: medoid
   allow_single_cluster: true
+
+pocket:
+  backend: fpocket
+  input_mode: explicit_pdbs
+  source_dir: results_bclxl/representatives
+  pdb_glob: "*.pdb"
+  top_n_pockets: 5
+  rank_by: score
+  max_structures: 50
+  fail_on_missing_fpocket: true
 sasa:
   selection: protein
   level: residue

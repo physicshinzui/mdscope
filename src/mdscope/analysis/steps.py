@@ -1963,6 +1963,12 @@ def _parse_fpocket_info(info_path: Path, structure_id: str) -> list[dict[str, An
     flush()
 
     rows: list[dict[str, Any]] = []
+    def _pick(d: dict[str, Any], *keys: str) -> Any:
+        for k in keys:
+            if k in d:
+                return d[k]
+        return None
+
     for p in parsed:
         rows.append(
             {
@@ -1972,6 +1978,30 @@ def _parse_fpocket_info(info_path: Path, structure_id: str) -> list[dict[str, An
                 "druggability_score": p.get("druggability_score", p.get("drug_score")),
                 "volume": p.get("volume", p.get("volume_(approx)")),
                 "alpha_sphere_count": p.get("number_of_alpha_spheres", p.get("nb_asph")),
+                "total_sasa": _pick(p, "total_sasa"),
+                "polar_sasa": _pick(p, "polar_sasa"),
+                "apolar_sasa": _pick(p, "apolar_sasa"),
+                "mean_local_hydrophobic_density": _pick(p, "mean_local_hydrophobic_density"),
+                "mean_alpha_sphere_radius": _pick(p, "mean_alpha_sphere_radius", "mean_asph_ray"),
+                "mean_alpha_sphere_solvent_access": _pick(
+                    p,
+                    "mean_alp_sph_solvent_access",
+                    "mean_alpha_sphere_solvent_access",
+                    "masph_sacc",
+                ),
+                "apolar_alpha_sphere_proportion": _pick(p, "apolar_alpha_sphere_proportion", "apolar_asphere_prop"),
+                "hydrophobicity_score": _pick(p, "hydrophobicity_score"),
+                "volume_score": _pick(p, "volume_score"),
+                "polarity_score": _pick(p, "polarity_score"),
+                "charge_score": _pick(p, "charge_score"),
+                "proportion_of_polar_atoms": _pick(p, "proportion_of_polar_atoms", "prop_polar_atm"),
+                "alpha_sphere_density": _pick(p, "alpha_sphere_density", "as_density"),
+                "center_of_mass_alpha_sphere_max_dist": _pick(
+                    p,
+                    "cent_of_mass___alpha_sphere_max_dist",
+                    "cent_of_mass_alpha_sphere_max_dist",
+                ),
+                "flexibility": _pick(p, "flexibility", "flex"),
             }
         )
     return rows
