@@ -219,4 +219,6 @@ pytest -q
 
 ## License
 
-MIT
+TBD (not yet selected).
+
+This repository is currently shared for inspection/testing. Reuse/redistribution terms are not yet defined.
