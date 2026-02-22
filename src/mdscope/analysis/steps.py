@@ -1420,7 +1420,13 @@ def run_convergence(ctx: RunContext) -> None:
                 ax.set_ylabel("occupancy")
                 ax.set_ylim(0.0, 1.0)
                 ax.set_title(f"Cluster Occupancy by Block: {traj}")
-                ax.legend(loc="best", fontsize=7, ncol=2)
+                ax.legend(
+                    loc="upper left",
+                    bbox_to_anchor=(1.02, 1.0),
+                    borderaxespad=0.0,
+                    fontsize=7,
+                    ncol=1,
+                )
                 _save_plot(cfg, fig, dirs["figures"] / f"convergence_cluster_occupancy_blocks_{traj}")
                 plt.close(fig)
 
