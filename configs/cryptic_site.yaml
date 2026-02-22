@@ -81,7 +81,8 @@ pca:
 cluster:
   method: hdbscan
   min_cluster_size: 10
-  representative_method: medoid
+  representative_method: random 
+  representative_random_n: 10
   allow_single_cluster: true
 
 pocket:

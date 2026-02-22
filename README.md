@@ -276,6 +276,6 @@ pytest -q
 
 ## License
 
-TBD (not yet selected).
+MIT License (see `LICENSE`).
 
-This repository is currently shared for inspection/testing. Reuse/redistribution terms are not yet defined.
+Note: third-party dependencies and test data may be distributed under their own licenses/terms.
