@@ -933,7 +933,16 @@ def _plot_pca_free_energy_rt(
 
     refs = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
     if len(refs) > 0:
-        ax.scatter(refs["PC1"], refs["PC2"], marker="x", s=48, linewidths=1.6, c="red", label="reference")
+        ax.scatter(
+            refs["PC1"],
+            refs["PC2"],
+            marker="x",
+            s=48,
+            linewidths=1.6,
+            c="red",
+            label="reference",
+            zorder=10,
+        )
         ax.legend(loc="best")
 
     cbar = fig.colorbar(cf, ax=ax)
@@ -1160,7 +1169,17 @@ def run_pca(ctx: RunContext) -> None:
             size = 42 if marker == "x" else 8
             alpha = 0.9 if marker == "x" else 0.6
             lw = 1.5 if marker == "x" else 0.0
-            ax.scatter(sub["PC1"], sub["PC2"], s=size, alpha=alpha, marker=marker, linewidths=lw, label=str(tr))
+            zorder = 10 if marker == "x" else 2
+            ax.scatter(
+                sub["PC1"],
+                sub["PC2"],
+                s=size,
+                alpha=alpha,
+                marker=marker,
+                linewidths=lw,
+                label=str(tr),
+                zorder=zorder,
+            )
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
     ax.legend(loc="best")
@@ -1274,6 +1293,7 @@ def run_cluster(ctx: RunContext) -> None:
             linewidths=1.6,
             color=color_by_label.get(label_i),
             label=str(ref_name),
+            zorder=10,
         )
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
