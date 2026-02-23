@@ -274,6 +274,16 @@ pytest -q
 - Commit configs/scripts/tests; do not commit heavy trajectories.
 - Recommended: ignore generated outputs (already covered by `.gitignore`).
 
+## Disclaimer
+
+`mdscope` is a research-oriented MD trajectory analysis toolkit. Results depend on input topology/trajectory quality, atom selections, mapping/alignment settings, preprocessing, and third-party library/tool versions.
+
+Users are responsible for validating analysis outputs and scientific interpretations. For critical results, cross-checking with independent tools/workflows (e.g., MDAnalysis scripts, GROMACS/cpptraj, PyMOL) is strongly recommended.
+
+Some integrations may require minor adjustments across upstream tool versions (e.g., `fpocket` output formats). Water analysis is currently implemented as a Phase-1 feature set (`occupancy`, `RDF`, `residence`).
+
+This software is provided "as is", without warranty of any kind.
+
 ## License
 
 MIT License (see `LICENSE`).
