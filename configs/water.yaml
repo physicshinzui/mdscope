@@ -5,10 +5,10 @@ preset: full
 
 system:
   # Shared topology used for all trajectories (choose this OR `topologies` below).
-  topology: ../../data/ace-a-nme/ace-A-nme.gro
+  topology: ../../data/hrex_data/hrex.gro
   # One or more trajectory files (XTC/DCD/...); order must match trajectory_names/topologies.
   trajectories:
-    - ../../data/ace-a-nme/hrex_water.xtc
+    - ../../data/hrex_data/hrex_corr.xtc
   # Display names used in tables/plots.
   trajectory_names: [run1]
   # Default atom selection used by analyses that rely on `system.selection` (currently mainly Rg).
@@ -134,7 +134,7 @@ ramachandran:
   # Residue selection used for phi/psi extraction (usually protein).
   selection: protein
   # Optional explicit subset for per-residue outputs; format examples: A:10, B:20.
-  residues: [A:10, A:20]
+#  residues: [A:10, A:20]
 
 convergence:
   # Metrics used for convergence decision. Inputs are read from existing output CSVs.
