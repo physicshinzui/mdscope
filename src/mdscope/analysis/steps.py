@@ -655,16 +655,14 @@ def run_water(ctx: RunContext) -> None:
             last_frame_seen: int | None = None
             for ts in u.trajectory[_frame_slice(cfg)]:
                 near_idx = _nearby_water_oxygen_indices(water_ox_ag, region_ag, wcfg.cutoff_angstrom)
+                present_resids = {
+                    int(water_ox_ag[int(i)].resid)
+                    for i in near_idx
+                }
                 if wcfg.occupancy.count_mode == "oxygen_atoms":
                     water_count = int(len(near_idx))
-                    present_ids = {int(i) for i in near_idx}
                 else:
-                    present_resids = {
-                        int(water_ox_ag[int(i)].resid)
-                        for i in near_idx
-                    }
                     water_count = int(len(present_resids))
-                    present_ids = present_resids
                 frame = int(ts.frame)
                 last_frame_seen = frame
                 total_frames += 1
@@ -680,19 +678,22 @@ def run_water(ctx: RunContext) -> None:
                     if int(wcfg.residence.gap_tolerance_frames) != 0:
                         raise RuntimeError("water.residence.gap_tolerance_frames > 0 is not implemented in phase 1")
                     current_keys = set(active.keys())
-                    for wid in present_ids - current_keys:
+                    for wid in present_resids - current_keys:
                         active[int(wid)] = frame
-                    for wid in current_keys - present_ids:
+                    for wid in current_keys - present_resids:
                         start_frame = int(active.pop(int(wid)))
-                        duration = frame - start_frame
-                        if duration >= int(wcfg.residence.min_stay_frames):
+                        duration_frame_span = frame - start_frame
+                        # Number of sampled frames in the contiguous event, consistent with frame slicing.
+                        duration_sampled = int(max(duration_frame_span // max(cfg.frames.step, 1), 0) + 1)
+                        if duration_sampled >= int(wcfg.residence.min_stay_frames):
                             residence_event_rows.append(
                                 {
                                     "trajectory": traj_name,
                                     "water_id": int(wid),
                                     "start_frame": start_frame,
                                     "end_frame": frame - 1,
-                                    "duration_frames": int(duration),
+                                    "duration_frames": int(duration_sampled),
+                                    "duration_frame_span": int(max((frame - 1) - start_frame, 0)),
                                 }
                             )
             if "residence" in enabled:
@@ -700,15 +701,17 @@ def run_water(ctx: RunContext) -> None:
                 final_frame = last_frame_seen
                 if final_frame is not None:
                     for wid, start_frame in list(active.items()):
-                        duration = final_frame - int(start_frame) + 1
-                        if duration >= int(wcfg.residence.min_stay_frames):
+                        duration_frame_span = int(final_frame) - int(start_frame)
+                        duration_sampled = int(max(duration_frame_span // max(cfg.frames.step, 1), 0) + 1)
+                        if duration_sampled >= int(wcfg.residence.min_stay_frames):
                             residence_event_rows.append(
                                 {
                                     "trajectory": traj_name,
                                     "water_id": int(wid),
                                     "start_frame": int(start_frame),
                                     "end_frame": int(final_frame),
-                                    "duration_frames": int(duration),
+                                    "duration_frames": int(duration_sampled),
+                                    "duration_frame_span": int(duration_frame_span),
                                 }
                             )
                 traj_info["occupancy_residence_frames"] = int(total_frames)
@@ -795,7 +798,17 @@ def run_water(ctx: RunContext) -> None:
             _plot_water_rdf(cfg, rdf_df, dirs["figures"] / "water_rdf")
 
     if "residence" in enabled:
-        events_df = pd.DataFrame(residence_event_rows)
+        events_df = pd.DataFrame(
+            residence_event_rows,
+            columns=[
+                "trajectory",
+                "water_id",
+                "start_frame",
+                "end_frame",
+                "duration_frames",
+                "duration_frame_span",
+            ],
+        )
         events_df.to_csv(dirs["tables"] / "water_residence_events.csv", index=False)
         if len(events_df) > 0:
             summary = (
