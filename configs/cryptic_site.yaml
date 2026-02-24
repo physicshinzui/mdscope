@@ -60,6 +60,7 @@ rmsf:
   align_selection: backbone
 pca:
   mode: project
+  feature_mode: distance
   fit_trajectory: WT
   align: true
   selection: name CA

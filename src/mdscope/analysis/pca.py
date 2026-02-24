@@ -8,6 +8,18 @@ from ._common import RunContext, _auto_hist_bins, _frame_slice, _imports, _load_
 from .mapping import build_residue_mapping, filter_mapping_to_reference_resindices, ligand_site_resindices
 
 
+def _pairwise_distance_vector(positions: Any) -> Any:
+    _, np, _, _ = _imports()
+    pos = np.asarray(positions, dtype=float)
+    if pos.ndim != 2 or pos.shape[1] != 3:
+        raise ValueError(f"positions must have shape (n_atoms, 3), got {pos.shape}")
+    if pos.shape[0] < 2:
+        raise ValueError("distance-based PCA requires at least 2 atoms")
+    iu = np.triu_indices(pos.shape[0], k=1)
+    deltas = pos[iu[0]] - pos[iu[1]]
+    return np.linalg.norm(deltas, axis=1)
+
+
 def _collect_matrix(u: Any, selection: str, frame_slice: slice) -> tuple[Any, list[int]]:
     _, np, _, _ = _imports()
     ag = u.select_atoms(selection)
@@ -19,6 +31,19 @@ def _collect_matrix(u: Any, selection: str, frame_slice: slice) -> tuple[Any, li
     return np.vstack(rows), frames
 
 
+def _collect_distance_matrix(u: Any, selection: str, frame_slice: slice) -> tuple[Any, list[int]]:
+    _, np, _, _ = _imports()
+    ag = u.select_atoms(selection)
+    if len(ag) < 2:
+        raise RuntimeError(f"PCA distance mode selection must contain at least 2 atoms: '{selection}'")
+    rows = []
+    frames = []
+    for ts in u.trajectory[frame_slice]:
+        rows.append(_pairwise_distance_vector(ag.positions))
+        frames.append(int(ts.frame))
+    return np.vstack(rows), frames
+
+
 def _collect_matrix_from_atom_indices(u: Any, atom_indices: list[int], frame_slice: slice) -> tuple[Any, list[int]]:
     _, np, _, _ = _imports()
     ag = u.atoms[atom_indices]
@@ -26,6 +51,19 @@ def _collect_matrix_from_atom_indices(u: Any, atom_indices: list[int], frame_sli
     frames = []
     for ts in u.trajectory[frame_slice]:
         rows.append(ag.positions.reshape(-1).copy())
+        frames.append(int(ts.frame))
+    return np.vstack(rows), frames
+
+
+def _collect_distance_matrix_from_atom_indices(u: Any, atom_indices: list[int], frame_slice: slice) -> tuple[Any, list[int]]:
+    _, np, _, _ = _imports()
+    ag = u.atoms[atom_indices]
+    if len(ag) < 2:
+        raise RuntimeError("PCA distance mode site selection must contain at least 2 mapped atoms")
+    rows = []
+    frames = []
+    for ts in u.trajectory[frame_slice]:
+        rows.append(_pairwise_distance_vector(ag.positions))
         frames.append(int(ts.frame))
     return np.vstack(rows), frames
 
@@ -123,6 +161,7 @@ def run_pca(ctx: RunContext) -> None:
 
     dirs = ensure_dirs(ctx.outdir)
     cfg = ctx.config
+    feature_mode = cfg.pca.feature_mode
 
     names = _trajectory_names(cfg)
     matrices: dict[str, Any] = {}
@@ -206,7 +245,10 @@ def run_pca(ctx: RunContext) -> None:
 
         for name, u in universes:
             atom_indices = [atom_idx_by_traj[name][k] for k in key_order]
-            mat, frames = _collect_matrix_from_atom_indices(u, atom_indices, _frame_slice(cfg))
+            if feature_mode == "distance":
+                mat, frames = _collect_distance_matrix_from_atom_indices(u, atom_indices, _frame_slice(cfg))
+            else:
+                mat, frames = _collect_matrix_from_atom_indices(u, atom_indices, _frame_slice(cfg))
             matrices[name] = mat
             frames_map[name] = frames
 
@@ -226,7 +268,10 @@ def run_pca(ctx: RunContext) -> None:
         )
     else:
         for name, u in universes:
-            mat, frames = _collect_matrix(u, cfg.pca.selection, _frame_slice(cfg))
+            if feature_mode == "distance":
+                mat, frames = _collect_distance_matrix(u, cfg.pca.selection, _frame_slice(cfg))
+            else:
+                mat, frames = _collect_matrix(u, cfg.pca.selection, _frame_slice(cfg))
             matrices[name] = mat
             frames_map[name] = frames
 
@@ -308,18 +353,36 @@ def run_pca(ctx: RunContext) -> None:
                     f"{len(missing)} site atoms are missing for selection '{cfg.pca.site_atom_selection}'."
                 )
             coords = [ref_key_to_pos[k] for k in site_key_order]
-            ref_vec = np.array(coords).reshape(1, -1)
+            ref_coords = np.array(coords)
+            if feature_mode == "distance":
+                ref_vec = _pairwise_distance_vector(ref_coords).reshape(1, -1)
+            else:
+                ref_vec = ref_coords.reshape(1, -1)
         else:
             ref_sel = cfg.pca.selection
             ref_atoms = ref_u.select_atoms(ref_sel)
-            expected_atoms = pca.n_features_in_ // 3
-            if len(ref_atoms) != expected_atoms:
-                raise RuntimeError(
-                    f"PCA reference atom count mismatch for {pdb_path}: "
-                    f"selection '{ref_sel}' gives {len(ref_atoms)} atoms, expected {expected_atoms}. "
-                    "Use a selection that matches the PCA fit atoms exactly."
-                )
-            ref_vec = ref_atoms.positions.reshape(1, -1)
+            if feature_mode == "distance":
+                if len(ref_atoms) < 2:
+                    raise RuntimeError(
+                        f"PCA reference selection for distance mode must contain at least 2 atoms: '{ref_sel}'"
+                    )
+                expected_features = (len(ref_atoms) * (len(ref_atoms) - 1)) // 2
+                if expected_features != pca.n_features_in_:
+                    raise RuntimeError(
+                        f"PCA reference feature mismatch for {pdb_path}: "
+                        f"selection '{ref_sel}' gives {len(ref_atoms)} atoms -> {expected_features} pair distances, "
+                        f"expected {pca.n_features_in_}. Use a selection matching the PCA fit atoms exactly."
+                    )
+                ref_vec = _pairwise_distance_vector(ref_atoms.positions).reshape(1, -1)
+            else:
+                expected_atoms = pca.n_features_in_ // 3
+                if len(ref_atoms) != expected_atoms:
+                    raise RuntimeError(
+                        f"PCA reference atom count mismatch for {pdb_path}: "
+                        f"selection '{ref_sel}' gives {len(ref_atoms)} atoms, expected {expected_atoms}. "
+                        "Use a selection that matches the PCA fit atoms exactly."
+                    )
+                ref_vec = ref_atoms.positions.reshape(1, -1)
         ref_sc = pca.transform(ref_vec)
         ref_name = cfg.pca.reference_names[idx] if idx < len(cfg.pca.reference_names) else pdb_path.stem
         row = {"trajectory": ref_name, "frame": -1}
@@ -331,6 +394,16 @@ def run_pca(ctx: RunContext) -> None:
     scores.to_csv(dirs["tables"] / "pca_scores.csv", index=False)
     eig = pd.DataFrame({"component": [i + 1 for i in range(len(pca.explained_variance_))], "eigenvalue": pca.explained_variance_})
     eig.to_csv(dirs["tables"] / "pca_eigenvalues.csv", index=False)
+    (dirs["data"] / "pca_feature_space.json").write_text(
+        json.dumps(
+            {
+                "feature_mode": feature_mode,
+                "n_features": int(pca.n_features_in_),
+                "site_from_reference_ligand": bool(cfg.pca.site_from_reference_ligand),
+            },
+            indent=2,
+        )
+    )
 
     fig, ax = plt.subplots(figsize=(6, 6))
     for tr, sub in scores.groupby("trajectory"):

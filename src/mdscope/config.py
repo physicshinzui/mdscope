@@ -104,6 +104,7 @@ class RmsfConfig(BaseModel):
 
 class PcaConfig(BaseModel):
     mode: Literal["project", "joint"] = "project"
+    feature_mode: Literal["cartesian", "distance"] = "cartesian"
     fit_trajectory: str | None = None
     align: bool = True
     selection: str = "backbone"
@@ -514,6 +515,7 @@ def generate_template(preset: str = "standard") -> str:
         },
         "pca": {
             "mode": "project",
+            "feature_mode": "cartesian",
             "fit_trajectory": "run1",
             "align": True,
             "n_components": 10,
@@ -722,6 +724,8 @@ rmsf:
 pca:
   # project = fit PCA on one trajectory then project others; joint = fit on concatenated trajectories.
   mode: project  # project | joint
+  # PCA input features: cartesian = flattened xyz coordinates, distance = all pairwise distances among selected atoms.
+  feature_mode: cartesian  # cartesian | distance
   # Trajectory name used as PCA fit source in project mode; also alignment reference trajectory when pca.align=true.
   fit_trajectory: run1
   # Align trajectories before collecting PCA coordinates.
