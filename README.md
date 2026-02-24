@@ -213,13 +213,6 @@ system:
   - `pca.free_energy_smooth_sigma` (Gaussian smoothing in bin units)
   - Colorbar range fixed to `0.0-10.0 RT`
 
-CLI overrides:
-
-```bash
-mdscope run -c config.yaml --only pca --force-step pca \
-  --free-energy --fe-bins-auto-fd --fe-level-step-rt 0.5 --fe-smooth-sigma 1.0
-```
-
 ### Clustering / Representatives
 
 - HDBSCAN runs on selected PCA components (`pca.use_pcs`)

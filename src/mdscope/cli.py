@@ -72,23 +72,6 @@ def run(
     from_step: Annotated[str | None, typer.Option("--from-step", help="Start execution from this step")] = None,
     until_step: Annotated[str | None, typer.Option("--until-step", help="Stop execution at this step")] = None,
     dry_run: Annotated[bool, typer.Option("--dry-run", help="Validate and print planned steps only")] = False,
-    free_energy: Annotated[
-        bool | None,
-        typer.Option("--free-energy/--no-free-energy", help="Enable/disable PCA free-energy contour plot"),
-    ] = None,
-    fe_bins: Annotated[int | None, typer.Option("--fe-bins", help="Bin count for PCA free-energy 2D histogram")] = None,
-    fe_bins_auto_fd: Annotated[
-        bool,
-        typer.Option("--fe-bins-auto-fd", help="Use Freedman-Diaconis auto binning for PCA free-energy"),
-    ] = False,
-    fe_level_step_rt: Annotated[
-        float | None,
-        typer.Option("--fe-level-step-rt", help="Contour interval in RT units for PCA free-energy"),
-    ] = None,
-    fe_smooth_sigma: Annotated[
-        float | None,
-        typer.Option("--fe-smooth-sigma", help="Gaussian smoothing sigma (in bins) for PCA free-energy"),
-    ] = None,
     only_extra: Annotated[
         list[str],
         typer.Argument(
@@ -103,22 +86,6 @@ def run(
         cfg.output.outdir = outdir
     if resume:
         cfg.runtime.resume = True
-    if free_energy is not None:
-        cfg.pca.free_energy_enabled = free_energy
-    if fe_bins is not None:
-        if fe_bins < 10 or fe_bins > 400:
-            raise typer.BadParameter("--fe-bins must be in [10, 400]")
-        cfg.pca.free_energy_bins = fe_bins
-    if fe_bins_auto_fd:
-        cfg.pca.free_energy_bins = "auto_fd"
-    if fe_level_step_rt is not None:
-        if fe_level_step_rt <= 0:
-            raise typer.BadParameter("--fe-level-step-rt must be > 0")
-        cfg.pca.free_energy_level_step_rt = fe_level_step_rt
-    if fe_smooth_sigma is not None:
-        if fe_smooth_sigma < 0:
-            raise typer.BadParameter("--fe-smooth-sigma must be >= 0")
-        cfg.pca.free_energy_smooth_sigma = fe_smooth_sigma
 
     only_set = set(only or [])
     if only_extra:
