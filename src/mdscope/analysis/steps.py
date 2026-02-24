@@ -176,22 +176,6 @@ def _kabsch_fit(mobile: Any, reference: Any) -> Any:
     return m0 @ rot + ref_center
 
 
-def _kabsch_transform_coords(
-    mobile_fit: Any,
-    reference_fit: Any,
-    coords_to_transform: Any,
-) -> Any:
-    _, _, _, _ = _imports()
-    from MDAnalysis.analysis import align
-
-    mob_center = mobile_fit.mean(axis=0)
-    ref_center = reference_fit.mean(axis=0)
-    m0 = mobile_fit - mob_center
-    r0 = reference_fit - ref_center
-    rot, _ = align.rotation_matrix(m0, r0)
-    return (coords_to_transform - mob_center) @ rot + ref_center
-
-
 def _compute_rmsd(
     mobile_coords: Any,
     ref_coords: Any,
