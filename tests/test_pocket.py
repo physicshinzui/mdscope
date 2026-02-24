@@ -2,7 +2,9 @@ from pathlib import Path
 
 import pandas as pd
 
-from mdscope.analysis.steps import RunContext, run_pocket
+from mdscope.analysis._common import RunContext
+from mdscope.analysis.pocket import run_pocket
+import mdscope.analysis.pocket as pocket_module
 from mdscope.config import AppConfig, generate_template
 
 
@@ -47,9 +49,7 @@ def test_run_pocket_explicit_pdbs_with_mocked_fpocket(tmp_path: Path, monkeypatc
         }
     )
 
-    import mdscope.analysis.steps as steps
-
-    monkeypatch.setattr(steps, "_fpocket_available", lambda: True)
+    monkeypatch.setattr(pocket_module, "_fpocket_available", lambda: True)
 
     def _fake_run_fpocket_command(pdb_path: Path, cwd: Path):
         outdir_local = cwd / f"{pdb_path.stem}_out"
@@ -73,7 +73,7 @@ def test_run_pocket_explicit_pdbs_with_mocked_fpocket(tmp_path: Path, monkeypatc
         )
         return 0, "ok", ""
 
-    monkeypatch.setattr(steps, "_run_fpocket_command", _fake_run_fpocket_command)
+    monkeypatch.setattr(pocket_module, "_run_fpocket_command", _fake_run_fpocket_command)
 
     run_pocket(RunContext(config=cfg, outdir=outdir, cache={}))
 

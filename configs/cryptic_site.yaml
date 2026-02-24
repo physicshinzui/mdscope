@@ -3,18 +3,21 @@ system:
   topologies:
     - ../../data/WT/topology.pdb
     - ../../data/F143W/topology.pdb
+    - ../../../17_takeuchi/data/npt_310K-350K/ref_protein.pdb
   trajectories:
     - ../../data/WT/samples.xtc
     - ../../data/F143W/samples.xtc
+    - ../../../17_takeuchi/data/npt_310K-350K/rep0_protein.xtc
   trajectory_names:
     - WT
     - F143W
+    - rep0(md)
   selection: backbone
   align_selection: backbone
 frames:
   start: 0
-  stop: 1500
-  step: 1
+  stop: null
+  step: 10
 runtime:
   seed: 42
   resume: false
@@ -34,7 +37,7 @@ rmsd:
   map_mode: align
   selection: name CA
   align: true
-  align_selection: protein and name CA
+  align_selection: name CA
   debug_write_aligned_pdb: true
   debug_max_frames: 5
   min_mapped: 1
@@ -64,13 +67,15 @@ pca:
   use_pcs: [1, 2, 3]
   reference_pdbs:
   - ../../data/pdbs/2YXJ.pdb
+  - ../../data/pdbs/1maz.pdb
   reference_names:
   - 2yxj
+  - 1maz
   free_energy_enabled: true
   free_energy_bins: auto_fd
   free_energy_level_step_rt: 1.0
   free_energy_smooth_sigma: 2.0
-  free_energy_per_trajectory: false
+  free_energy_per_trajectory: true 
   site_from_reference_ligand: true 
   site_reference_pdb: ../../data/pdbs/2YXJ.pdb
   site_ligand_selection: resname N3C
@@ -85,17 +90,17 @@ cluster:
   representative_random_n: 10
   allow_single_cluster: true
 
-pocket:
-  backend: fpocket
-  input_mode: explicit_pdbs
-  source_dir: results_bclxl/representatives
-  pdb_glob: "*.pdb"
-  top_n_pockets: 5
-  rank_by: score
-  max_structures: 50
-  fail_on_missing_fpocket: true
+#pocket:
+#  backend: fpocket
+#  input_mode: explicit_pdbs
+#  source_dir: results_bclxl/representatives
+#  pdb_glob: "*.pdb"
+#  top_n_pockets: 5
+#  rank_by: score
+#  max_structures: 50
+#  fail_on_missing_fpocket: true
 sasa:
-  selection: protein
+  selection: protein and not name H*
   level: residue
   probe_radius: 1.4
   relative: true
@@ -114,6 +119,7 @@ ramachandran:
   selection: protein
 #  residues: [A:2, A:3]
 analyses:
-#  distance: true
-#  ramachandran: true
-#  sasa: true
+  distance: false 
+  ramachandran: false 
+  sasa: false 
+  water: false

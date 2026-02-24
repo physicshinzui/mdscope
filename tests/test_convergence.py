@@ -3,7 +3,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from mdscope.analysis.steps import RunContext, run_convergence
+from mdscope.analysis._common import RunContext
+from mdscope.analysis.convergence import run_convergence
 from mdscope.config import AppConfig
 
 

@@ -4,7 +4,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Callable
 
-from .analysis.steps import RunContext, STEP_HANDLERS
+from .analysis import RunContext, STEP_HANDLERS
 from .config import AppConfig, StepName
 from .state import StateStore, short_config_hash
 

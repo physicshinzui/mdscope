@@ -2,7 +2,8 @@ from pathlib import Path
 
 import pandas as pd
 
-from mdscope.analysis.steps import RunContext, run_water
+from mdscope.analysis._common import RunContext
+from mdscope.analysis.water import run_water
 from mdscope.config import AppConfig
 
 
