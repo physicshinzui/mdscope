@@ -1091,6 +1091,8 @@ def run_pca(ctx: RunContext) -> None:
         ref_u = mda.Universe(str(pdb_path))
 
         if cfg.pca.align:
+            from MDAnalysis.analysis.align import alignto
+
             align_sel = cfg.pca.site_align_selection if cfg.pca.site_from_reference_ligand else cfg.system.align_selection
             fit_res, ref_res, mapping, _ = build_residue_mapping(
                 mobile_universe=fit_u,
@@ -1114,14 +1116,23 @@ def run_pca(ctx: RunContext) -> None:
                     fit_align_idx.append(fit_idx)
                     ref_align_idx.append(int(a.index))
             if len(fit_align_idx) >= 3:
-                fit_align_coords = fit_u.atoms[fit_align_idx].positions.copy()
-                ref_align_coords = ref_u.atoms[ref_align_idx].positions.copy()
+                fit_align_ag = fit_u.atoms[fit_align_idx]
+                ref_align_ag = ref_u.atoms[ref_align_idx]
+                # Align the single reference structure to the PCA fit trajectory reference frame
+                # using the same mapped atom pairs used for correspondence.
+                alignto(
+                    ref_align_ag,
+                    fit_align_ag,
+                    select=None,
+                    subselection=ref_u.atoms,
+                    match_atoms=False,
+                )
             else:
-                fit_align_coords = None
-                ref_align_coords = None
+                fit_align_ag = None
+                ref_align_ag = None
         else:
-            fit_align_coords = None
-            ref_align_coords = None
+            fit_align_ag = None
+            ref_align_ag = None
 
         if cfg.pca.site_from_reference_ligand:
             if site_key_order is None:
@@ -1147,9 +1158,6 @@ def run_pca(ctx: RunContext) -> None:
                     "Use a selection that matches the PCA fit atoms exactly."
                 )
             ref_vec = ref_atoms.positions.reshape(1, -1)
-        if fit_align_coords is not None and ref_align_coords is not None:
-            ref_vec_coords = ref_vec.reshape(-1, 3)
-            ref_vec = _kabsch_transform_coords(ref_align_coords, fit_align_coords, ref_vec_coords).reshape(1, -1)
         ref_sc = pca.transform(ref_vec)
         ref_name = cfg.pca.reference_names[idx] if idx < len(cfg.pca.reference_names) else pdb_path.stem
         row = {"trajectory": ref_name, "frame": -1}
