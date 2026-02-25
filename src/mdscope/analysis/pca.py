@@ -73,6 +73,7 @@ def _plot_pca_free_energy_rt(
     scores: Any,
     out_prefix: Path,
     title: str,
+    axis_limits: tuple[tuple[float, float], tuple[float, float]] | None = None,
 ) -> None:
     _, np, _, plt = _imports()
 
@@ -146,12 +147,40 @@ def _plot_pca_free_energy_rt(
         ax.legend(loc="best")
 
     cbar = fig.colorbar(cf, ax=ax)
-    cbar.set_label("Free energy (RT)")
+    cbar.set_label("Free energy / RT")
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
+    if axis_limits is not None:
+        (xmin, xmax), (ymin, ymax) = axis_limits
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
     ax.set_title(title)
     _save_plot(cfg, fig, out_prefix)
     plt.close(fig)
+
+
+def _pc12_axis_limits(scores: Any) -> tuple[tuple[float, float], tuple[float, float]] | None:
+    _, np, _, _ = _imports()
+    data = scores[scores["PC1"].notna() & scores["PC2"].notna()]
+    if len(data) == 0:
+        return None
+    x = data["PC1"].to_numpy(dtype=float)
+    y = data["PC2"].to_numpy(dtype=float)
+    xmin = float(np.nanmin(x))
+    xmax = float(np.nanmax(x))
+    ymin = float(np.nanmin(y))
+    ymax = float(np.nanmax(y))
+    if not all(np.isfinite(v) for v in [xmin, xmax, ymin, ymax]):
+        return None
+    xspan = xmax - xmin
+    yspan = ymax - ymin
+    xpad = max(0.05 * xspan, 1e-6 if xspan <= 0 else 0.0)
+    ypad = max(0.05 * yspan, 1e-6 if yspan <= 0 else 0.0)
+    if xspan == 0:
+        xpad = 0.5
+    if yspan == 0:
+        ypad = 0.5
+    return ((xmin - xpad, xmax + xpad), (ymin - ypad, ymax + ypad))
 
 
 def run_pca(ctx: RunContext) -> None:
@@ -404,6 +433,7 @@ def run_pca(ctx: RunContext) -> None:
             indent=2,
         )
     )
+    axis_limits = _pc12_axis_limits(scores)
 
     fig, ax = plt.subplots(figsize=(6, 6))
     for tr, sub in scores.groupby("trajectory"):
@@ -425,9 +455,46 @@ def run_pca(ctx: RunContext) -> None:
             )
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
+    if axis_limits is not None:
+        (xmin, xmax), (ymin, ymax) = axis_limits
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
     ax.legend(loc="best")
     _save_plot(cfg, fig, dirs["figures"] / "pca_scatter")
     plt.close(fig)
+
+    refs_only = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
+    for traj_name, sub in scores.groupby("trajectory"):
+        if str(traj_name) in set(refs_only["trajectory"].astype(str).tolist()):
+            continue
+        sub = sub[sub["PC1"].notna() & sub["PC2"].notna()]
+        if len(sub) == 0:
+            continue
+        fig_t, ax_t = plt.subplots(figsize=(6, 6))
+        normal = sub[sub["frame"] != -1]
+        if len(normal) > 0:
+            ax_t.scatter(normal["PC1"], normal["PC2"], s=8, alpha=0.6, marker="o", linewidths=0.0, label=str(traj_name), zorder=2)
+        if len(refs_only) > 0:
+            ax_t.scatter(
+                refs_only["PC1"],
+                refs_only["PC2"],
+                s=42,
+                alpha=0.9,
+                marker="x",
+                linewidths=1.5,
+                c="red",
+                label="reference",
+                zorder=10,
+            )
+        ax_t.set_xlabel("PC1")
+        ax_t.set_ylabel("PC2")
+        if axis_limits is not None:
+            (xmin, xmax), (ymin, ymax) = axis_limits
+            ax_t.set_xlim(xmin, xmax)
+            ax_t.set_ylim(ymin, ymax)
+        ax_t.legend(loc="best")
+        _save_plot(cfg, fig_t, dirs["figures"] / f"pca_scatter_{traj_name}")
+        plt.close(fig_t)
 
     if cfg.pca.free_energy_enabled:
         _plot_pca_free_energy_rt(
@@ -435,6 +502,7 @@ def run_pca(ctx: RunContext) -> None:
             scores,
             dirs["figures"] / "pca_free_energy_rt",
             "PCA Free Energy Landscape (RT)",
+            axis_limits=axis_limits,
         )
         if cfg.pca.free_energy_per_trajectory:
             for traj_name, sub in scores.groupby("trajectory"):
@@ -445,4 +513,5 @@ def run_pca(ctx: RunContext) -> None:
                     sub,
                     dirs["figures"] / f"pca_free_energy_rt_{traj_name}",
                     f"PCA Free Energy Landscape (RT): {traj_name}",
+                    axis_limits=axis_limits,
                 )
