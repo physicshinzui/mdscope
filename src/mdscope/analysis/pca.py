@@ -74,6 +74,7 @@ def _plot_pca_free_energy_rt(
     out_prefix: Path,
     title: str,
     axis_limits: tuple[tuple[float, float], tuple[float, float]] | None = None,
+    reference_colors: dict[str, Any] | None = None,
 ) -> None:
     _, np, _, plt = _imports()
 
@@ -135,13 +136,14 @@ def _plot_pca_free_energy_rt(
     refs = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
     if len(refs) > 0:
         for ref_name, sub in refs.groupby("trajectory"):
+            ref_color = reference_colors.get(str(ref_name)) if reference_colors else "red"
             ax.scatter(
                 sub["PC1"],
                 sub["PC2"],
                 marker="x",
                 s=48,
                 linewidths=1.6,
-                c="red",
+                c=ref_color,
                 label=str(ref_name),
                 zorder=10,
             )
@@ -435,6 +437,12 @@ def run_pca(ctx: RunContext) -> None:
         )
     )
     axis_limits = _pc12_axis_limits(scores)
+    refs_only = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
+    reference_colors: dict[str, Any] = {}
+    if len(refs_only) > 0:
+        cmap_refs = plt.get_cmap("tab10")
+        ref_names = sorted(set(str(v) for v in refs_only["trajectory"].tolist()))
+        reference_colors = {name: cmap_refs(i % 10) for i, name in enumerate(ref_names)}
 
     fig, ax = plt.subplots(figsize=(6, 6))
     for tr, sub in scores.groupby("trajectory"):
@@ -444,6 +452,7 @@ def run_pca(ctx: RunContext) -> None:
             alpha = 0.9 if marker == "x" else 0.6
             lw = 1.5 if marker == "x" else 0.0
             zorder = 10 if marker == "x" else 2
+            color = reference_colors.get(str(tr)) if marker == "x" else None
             ax.scatter(
                 sub["PC1"],
                 sub["PC2"],
@@ -453,6 +462,7 @@ def run_pca(ctx: RunContext) -> None:
                 linewidths=lw,
                 label=str(tr),
                 zorder=zorder,
+                c=color if color is not None else None,
             )
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
@@ -464,7 +474,6 @@ def run_pca(ctx: RunContext) -> None:
     _save_plot(cfg, fig, dirs["figures"] / "pca_scatter")
     plt.close(fig)
 
-    refs_only = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
     for traj_name, sub in scores.groupby("trajectory"):
         if str(traj_name) in set(refs_only["trajectory"].astype(str).tolist()):
             continue
@@ -477,6 +486,7 @@ def run_pca(ctx: RunContext) -> None:
             ax_t.scatter(normal["PC1"], normal["PC2"], s=8, alpha=0.6, marker="o", linewidths=0.0, label=str(traj_name), zorder=2)
         if len(refs_only) > 0:
             for ref_name, sub_ref in refs_only.groupby("trajectory"):
+                ref_color = reference_colors.get(str(ref_name), "red")
                 ax_t.scatter(
                     sub_ref["PC1"],
                     sub_ref["PC2"],
@@ -484,7 +494,7 @@ def run_pca(ctx: RunContext) -> None:
                     alpha=0.9,
                     marker="x",
                     linewidths=1.5,
-                    c="red",
+                    c=ref_color,
                     label=str(ref_name),
                     zorder=10,
                 )
@@ -505,6 +515,7 @@ def run_pca(ctx: RunContext) -> None:
             dirs["figures"] / "pca_free_energy_rt",
             "PCA Free Energy Landscape (RT)",
             axis_limits=axis_limits,
+            reference_colors=reference_colors,
         )
         if cfg.pca.free_energy_per_trajectory:
             for traj_name, sub in scores.groupby("trajectory"):
@@ -517,4 +528,5 @@ def run_pca(ctx: RunContext) -> None:
                     dirs["figures"] / f"pca_free_energy_rt_{traj_name}",
                     f"PCA Free Energy Landscape (RT): {traj_name}",
                     axis_limits=axis_limits,
+                    reference_colors=reference_colors,
                 )
