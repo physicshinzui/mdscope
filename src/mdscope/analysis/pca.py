@@ -134,16 +134,17 @@ def _plot_pca_free_energy_rt(
 
     refs = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
     if len(refs) > 0:
-        ax.scatter(
-            refs["PC1"],
-            refs["PC2"],
-            marker="x",
-            s=48,
-            linewidths=1.6,
-            c="red",
-            label="reference",
-            zorder=10,
-        )
+        for ref_name, sub in refs.groupby("trajectory"):
+            ax.scatter(
+                sub["PC1"],
+                sub["PC2"],
+                marker="x",
+                s=48,
+                linewidths=1.6,
+                c="red",
+                label=str(ref_name),
+                zorder=10,
+            )
         ax.legend(loc="best")
 
     cbar = fig.colorbar(cf, ax=ax)
@@ -475,17 +476,18 @@ def run_pca(ctx: RunContext) -> None:
         if len(normal) > 0:
             ax_t.scatter(normal["PC1"], normal["PC2"], s=8, alpha=0.6, marker="o", linewidths=0.0, label=str(traj_name), zorder=2)
         if len(refs_only) > 0:
-            ax_t.scatter(
-                refs_only["PC1"],
-                refs_only["PC2"],
-                s=42,
-                alpha=0.9,
-                marker="x",
-                linewidths=1.5,
-                c="red",
-                label="reference",
-                zorder=10,
-            )
+            for ref_name, sub_ref in refs_only.groupby("trajectory"):
+                ax_t.scatter(
+                    sub_ref["PC1"],
+                    sub_ref["PC2"],
+                    s=42,
+                    alpha=0.9,
+                    marker="x",
+                    linewidths=1.5,
+                    c="red",
+                    label=str(ref_name),
+                    zorder=10,
+                )
         ax_t.set_xlabel("PC1")
         ax_t.set_ylabel("PC2")
         if axis_limits is not None:
@@ -508,9 +510,10 @@ def run_pca(ctx: RunContext) -> None:
             for traj_name, sub in scores.groupby("trajectory"):
                 if (sub["frame"] == -1).all():
                     continue
+                sub_with_refs = pd.concat([sub, refs_only], ignore_index=True) if len(refs_only) > 0 else sub
                 _plot_pca_free_energy_rt(
                     cfg,
-                    sub,
+                    sub_with_refs,
                     dirs["figures"] / f"pca_free_energy_rt_{traj_name}",
                     f"PCA Free Energy Landscape (RT): {traj_name}",
                     axis_limits=axis_limits,
