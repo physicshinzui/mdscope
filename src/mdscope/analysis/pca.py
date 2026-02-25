@@ -143,7 +143,7 @@ def _plot_pca_free_energy_rt(
                 marker="x",
                 s=48,
                 linewidths=1.6,
-                c=ref_color,
+                color=ref_color,
                 label=str(ref_name),
                 zorder=10,
             )
@@ -462,7 +462,7 @@ def run_pca(ctx: RunContext) -> None:
                 linewidths=lw,
                 label=str(tr),
                 zorder=zorder,
-                c=color if color is not None else None,
+                color=color if color is not None else None,
             )
     ax.set_xlabel("PC1")
     ax.set_ylabel("PC2")
@@ -494,7 +494,7 @@ def run_pca(ctx: RunContext) -> None:
                     alpha=0.9,
                     marker="x",
                     linewidths=1.5,
-                    c=ref_color,
+                    color=ref_color,
                     label=str(ref_name),
                     zorder=10,
                 )
