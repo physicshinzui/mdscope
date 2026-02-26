@@ -162,17 +162,31 @@ def _plot_pca_free_energy_rt(
     plt.close(fig)
 
 
-def _pc12_axis_limits(scores: Any) -> tuple[tuple[float, float], tuple[float, float]] | None:
+def _pc12_axis_limits(scores: Any, cfg: Any) -> tuple[tuple[float, float], tuple[float, float]] | None:
     _, np, _, _ = _imports()
+    mode = getattr(cfg.pca, "plot_axis_mode", "full")
+    if mode == "manual":
+        if cfg.pca.plot_xlim is None or cfg.pca.plot_ylim is None:
+            return None
+        return ((float(cfg.pca.plot_xlim[0]), float(cfg.pca.plot_xlim[1])), (float(cfg.pca.plot_ylim[0]), float(cfg.pca.plot_ylim[1])))
+    if "PC1" not in scores.columns or "PC2" not in scores.columns:
+        return None
     data = scores[scores["PC1"].notna() & scores["PC2"].notna()]
     if len(data) == 0:
         return None
     x = data["PC1"].to_numpy(dtype=float)
     y = data["PC2"].to_numpy(dtype=float)
-    xmin = float(np.nanmin(x))
-    xmax = float(np.nanmax(x))
-    ymin = float(np.nanmin(y))
-    ymax = float(np.nanmax(y))
+    if mode == "percentile":
+        plo, phi = [float(v) for v in cfg.pca.plot_axis_percentile]
+        xmin = float(np.nanpercentile(x, plo))
+        xmax = float(np.nanpercentile(x, phi))
+        ymin = float(np.nanpercentile(y, plo))
+        ymax = float(np.nanpercentile(y, phi))
+    else:
+        xmin = float(np.nanmin(x))
+        xmax = float(np.nanmax(x))
+        ymin = float(np.nanmin(y))
+        ymax = float(np.nanmax(y))
     if not all(np.isfinite(v) for v in [xmin, xmax, ymin, ymax]):
         return None
     xspan = xmax - xmin
@@ -431,12 +445,20 @@ def run_pca(ctx: RunContext) -> None:
             {
                 "feature_mode": feature_mode,
                 "n_features": int(pca.n_features_in_),
+                "n_components_computed": int(getattr(pca, "n_components_", pca.n_components)),
                 "site_from_reference_ligand": bool(cfg.pca.site_from_reference_ligand),
             },
             indent=2,
         )
     )
-    axis_limits = _pc12_axis_limits(scores)
+    if "PC1" not in scores.columns or "PC2" not in scores.columns:
+        n_comp = int(getattr(pca, "n_components_", pca.n_components))
+        raise RuntimeError(
+            "PCA produced fewer than 2 components, so PC1-PC2 plots cannot be generated. "
+            f"Computed components: {n_comp}. This often happens when too few frames are available "
+            "(e.g., single-frame PDB trajectory) or the feature space rank is too low."
+        )
+    axis_limits = _pc12_axis_limits(scores, cfg)
     refs_only = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
     reference_colors: dict[str, Any] = {}
     if len(refs_only) > 0:

@@ -125,6 +125,10 @@ class PcaConfig(BaseModel):
     free_energy_level_step_rt: float = 1.0
     free_energy_smooth_sigma: float = 2.0
     free_energy_per_trajectory: bool = False
+    plot_axis_mode: Literal["full", "percentile", "manual"] = "full"
+    plot_axis_percentile: list[float] = [1.0, 99.0]
+    plot_xlim: list[float] | None = None
+    plot_ylim: list[float] | None = None
 
     @field_validator("free_energy_bins")
     @classmethod
@@ -151,6 +155,28 @@ class PcaConfig(BaseModel):
             raise ValueError("pca.free_energy_smooth_sigma must be >= 0")
         return value
 
+    @field_validator("plot_axis_percentile")
+    @classmethod
+    def validate_plot_axis_percentile(cls, value: list[float]) -> list[float]:
+        if len(value) != 2:
+            raise ValueError("pca.plot_axis_percentile must have exactly 2 values [low, high]")
+        lo, hi = float(value[0]), float(value[1])
+        if not (0 <= lo < hi <= 100):
+            raise ValueError("pca.plot_axis_percentile must satisfy 0 <= low < high <= 100")
+        return [lo, hi]
+
+    @field_validator("plot_xlim", "plot_ylim")
+    @classmethod
+    def validate_plot_axis_manual_range(cls, value: list[float] | None) -> list[float] | None:
+        if value is None:
+            return value
+        if len(value) != 2:
+            raise ValueError("manual PCA axis ranges must have exactly 2 values [min, max]")
+        lo, hi = float(value[0]), float(value[1])
+        if not lo < hi:
+            raise ValueError("manual PCA axis ranges must satisfy min < max")
+        return [lo, hi]
+
     @model_validator(mode="after")
     def validate_refs(self) -> "PcaConfig":
         if self.reference_names and len(self.reference_names) != len(self.reference_pdbs):
@@ -159,6 +185,8 @@ class PcaConfig(BaseModel):
             raise ValueError("pca.site_ligand_selection is required when pca.site_from_reference_ligand=true")
         if self.site_map_mode == "user_map" and not self.site_map_file:
             raise ValueError("pca.site_map_file is required when pca.site_map_mode=user_map")
+        if self.plot_axis_mode == "manual" and (self.plot_xlim is None or self.plot_ylim is None):
+            raise ValueError("pca.plot_xlim and pca.plot_ylim are required when pca.plot_axis_mode=manual")
         return self
 
 
@@ -527,6 +555,10 @@ def generate_template(preset: str = "standard") -> str:
             "free_energy_level_step_rt": 1.0,
             "free_energy_smooth_sigma": 2.0,
             "free_energy_per_trajectory": False,
+            "plot_axis_mode": "full",
+            "plot_axis_percentile": [1.0, 99.0],
+            "plot_xlim": None,
+            "plot_ylim": None,
             "site_from_reference_ligand": False,
             "site_reference_pdb": "../data/reference/reference.pdb",
             "site_ligand_selection": "resname LIG",
@@ -750,6 +782,14 @@ pca:
   free_energy_smooth_sigma: 2.0
   # If true, also write per-trajectory free-energy maps in addition to combined map.
   free_energy_per_trajectory: false
+  # Axis-range policy for PCA scatter/FEL plots:
+  # full = use all points, percentile = robust display range, manual = use plot_xlim/plot_ylim.
+  plot_axis_mode: full  # full | percentile | manual
+  # Percentile range used when plot_axis_mode=percentile (display only; PCA/FEL calculations still use all points).
+  plot_axis_percentile: [1.0, 99.0]
+  # Manual axis ranges used when plot_axis_mode=manual.
+  plot_xlim: null  # example: [-20.0, 20.0]
+  plot_ylim: null  # example: [-15.0, 15.0]
   # Ligand-site PCA (optional):
   # If true, define PCA atom set from residues near a ligand in a reference structure, then map to each trajectory.
   site_from_reference_ligand: false
