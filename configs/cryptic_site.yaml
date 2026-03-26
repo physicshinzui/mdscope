@@ -3,11 +3,11 @@ system:
   topologies:
     - ../../data/WT/topology.pdb
     - ../../data/F143W/topology.pdb
-    - ../../../17_takeuchi/data/npt_310K-350K/ref_protein.pdb
+    - ../../../../17_takeuchi/data/npt_310K-350K/ref_protein.pdb
   trajectories:
     - ../../data/WT/samples.xtc
     - ../../data/F143W/samples.xtc
-    - ../../../17_takeuchi/data/npt_310K-350K/rep0_protein.xtc
+    - ../../../../17_takeuchi/data/npt_310K-350K/rep0_protein.xtc
   trajectory_names:
     - WT
     - F143W

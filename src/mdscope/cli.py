@@ -67,7 +67,10 @@ def run(
     outdir: Annotated[Path | None, typer.Option("--outdir", help="Override output directory")] = None,
     resume: Annotated[bool, typer.Option("--resume", help="Resume from completed steps")] = False,
     force: Annotated[bool, typer.Option("--force", help="Recompute all selected steps")] = False,
-    only: Annotated[list[str] | None, typer.Option("--only", help="Run only specific steps")] = None,
+    only: Annotated[
+        list[str] | None,
+        typer.Option("--only", help="Run only the requested steps and any dependencies they require"),
+    ] = None,
     force_step: Annotated[list[str] | None, typer.Option("--force-step", help="Force specific steps")] = None,
     from_step: Annotated[str | None, typer.Option("--from-step", help="Start execution from this step")] = None,
     until_step: Annotated[str | None, typer.Option("--until-step", help="Stop execution at this step")] = None,
