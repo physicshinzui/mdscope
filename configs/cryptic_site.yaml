@@ -17,7 +17,7 @@ system:
 frames:
   start: 0
   stop: null
-  step: 10
+  step: 1
 runtime:
   seed: 42
   resume: false
@@ -59,9 +59,9 @@ rmsf:
   align_to: average
   align_selection: backbone
 pca:
-  mode: project
-  feature_mode: distance
-  fit_trajectory: WT
+  mode: joint #project
+  feature_mode: distance #cartesian 
+  fit_trajectory: rep0(md) #WT
   align: true
   selection: name CA
   n_components: 3

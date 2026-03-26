@@ -394,6 +394,10 @@ class AppConfig(BaseModel):
         if self.pca.mode == "project" and not self.pca.fit_trajectory:
             names = self.system.trajectory_names or []
             self.pca.fit_trajectory = names[0] if names else "traj0"
+        names = self.system.trajectory_names or [f"traj{i}" for i, _ in enumerate(self.system.trajectories)]
+        if self.pca.fit_trajectory not in names:
+            joined = ", ".join(names)
+            raise ValueError(f"pca.fit_trajectory must be one of: {joined}")
         if self.rmsd.map_mode == "user_map" and not self.rmsd.map_file:
             raise ValueError("rmsd.map_file is required when rmsd.map_mode=user_map")
         if self.rmsd.region_mode == "ligand_site" and not self.rmsd.ligand_selection:
