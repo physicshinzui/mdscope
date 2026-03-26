@@ -8,6 +8,20 @@ from ._common import RunContext, _auto_hist_bins, _frame_slice, _imports, _load_
 from .mapping import build_residue_mapping, filter_mapping_to_reference_resindices, ligand_site_resindices
 
 
+REFERENCE_COLORS = [
+    "#111111",
+    "#d62728",
+    "#1f77b4",
+    "#2ca02c",
+    "#ff7f0e",
+    "#8c564b",
+    "#e377c2",
+    "#17becf",
+    "#bcbd22",
+    "#9467bd",
+]
+
+
 def _pairwise_distance_vector(positions: Any) -> Any:
     _, np, _, _ = _imports()
     pos = np.asarray(positions, dtype=float)
@@ -200,6 +214,10 @@ def _pc12_axis_limits(scores: Any, cfg: Any) -> tuple[tuple[float, float], tuple
     return ((xmin - xpad, xmax + xpad), (ymin - ypad, ymax + ypad))
 
 
+def _reference_color_map(ref_names: list[str]) -> dict[str, str]:
+    return {name: REFERENCE_COLORS[i % len(REFERENCE_COLORS)] for i, name in enumerate(sorted(ref_names))}
+
+
 def plot_pca_from_scores(cfg: Any, scores: Any, outdir: Path) -> None:
     _, _, pd, plt = _imports()
     dirs = ensure_dirs(outdir)
@@ -210,9 +228,8 @@ def plot_pca_from_scores(cfg: Any, scores: Any, outdir: Path) -> None:
     refs_only = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
     reference_colors: dict[str, Any] = {}
     if len(refs_only) > 0:
-        cmap_refs = plt.get_cmap("tab10")
         ref_names = sorted(set(str(v) for v in refs_only["trajectory"].tolist()))
-        reference_colors = {name: cmap_refs(i % 10) for i, name in enumerate(ref_names)}
+        reference_colors = _reference_color_map(ref_names)
 
     fig, ax = plt.subplots(figsize=(6, 6))
     for tr, sub in scores.groupby("trajectory"):

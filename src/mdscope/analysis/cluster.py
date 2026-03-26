@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from ._common import RunContext, _imports, _save_plot, ensure_dirs
+from .pca import _reference_color_map
 
 
 def plot_cluster_from_tables(cfg, scores, labels_df, outdir) -> None:
@@ -30,6 +31,10 @@ def plot_cluster_from_tables(cfg, scores, labels_df, outdir) -> None:
         )
 
     refs = merged[merged["frame"] == -1]
+    reference_colors: dict[str, object] = {}
+    if len(refs) > 0:
+        ref_names = sorted(set(str(v) for v in refs["trajectory"].tolist()))
+        reference_colors = _reference_color_map(ref_names)
     for ref_name, sub in refs.groupby("trajectory"):
         ax.scatter(
             sub["PC1"],
@@ -38,7 +43,7 @@ def plot_cluster_from_tables(cfg, scores, labels_df, outdir) -> None:
             alpha=0.95,
             marker="x",
             linewidths=1.6,
-            color="black",
+            color=reference_colors.get(str(ref_name)),
             label=str(ref_name),
             zorder=10,
         )
