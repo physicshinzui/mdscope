@@ -10,6 +10,7 @@ import typer
 from .config import PRESETS, generate_template, load_config
 from .pipeline import run_pipeline
 from .plotting import apply_publication_style
+from .replot import REPLOTTERS, replot_results
 
 app = typer.Typer(
     help="MD trajectory analysis automation (config-first)",
@@ -124,6 +125,40 @@ def run(
         from_step=from_step,
         until_step=until_step,
     )
+
+
+@app.command("replot")
+def replot(
+    config_path: Annotated[Path, typer.Option("-c", "--config", help="Path to YAML config")],
+    outdir: Annotated[Path | None, typer.Option("--outdir", help="Override output directory")] = None,
+    only: Annotated[
+        list[str] | None,
+        typer.Option("--only", help="Recreate figures only for the requested analyses"),
+    ] = None,
+    only_extra: Annotated[
+        list[str],
+        typer.Argument(
+            help=f"Additional analysis names. Available: {', '.join(REPLOTTERS)}",
+        ),
+    ] = [],
+) -> None:
+    cfg = load_config(config_path)
+    if outdir is not None:
+        cfg.output.outdir = outdir
+
+    only_set = set(only or [])
+    if only_extra:
+        if not only_set:
+            raise typer.BadParameter("extra analysis names are only allowed when --only is provided")
+        only_set.update(only_extra)
+
+    results = replot_results(cfg, Path(cfg.output.outdir), only=only_set if only_set else None)
+    typer.echo(f"Replotted figures in {cfg.output.outdir}")
+    for name, stems in results.items():
+        if stems:
+            typer.echo(f"{name}: {len(stems)} figure group(s)")
+        else:
+            typer.echo(f"{name}: no figures regenerated")
 
 
 def main() -> None:

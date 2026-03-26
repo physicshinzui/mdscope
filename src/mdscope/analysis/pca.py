@@ -200,6 +200,108 @@ def _pc12_axis_limits(scores: Any, cfg: Any) -> tuple[tuple[float, float], tuple
     return ((xmin - xpad, xmax + xpad), (ymin - ypad, ymax + ypad))
 
 
+def plot_pca_from_scores(cfg: Any, scores: Any, outdir: Path) -> None:
+    _, _, pd, plt = _imports()
+    dirs = ensure_dirs(outdir)
+    if "PC1" not in scores.columns or "PC2" not in scores.columns:
+        raise RuntimeError("pca_scores.csv must contain PC1 and PC2 columns to regenerate PCA plots")
+
+    axis_limits = _pc12_axis_limits(scores, cfg)
+    refs_only = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
+    reference_colors: dict[str, Any] = {}
+    if len(refs_only) > 0:
+        cmap_refs = plt.get_cmap("tab10")
+        ref_names = sorted(set(str(v) for v in refs_only["trajectory"].tolist()))
+        reference_colors = {name: cmap_refs(i % 10) for i, name in enumerate(ref_names)}
+
+    fig, ax = plt.subplots(figsize=(6, 6))
+    for tr, sub in scores.groupby("trajectory"):
+        if "PC1" in sub and "PC2" in sub:
+            marker = "x" if (sub["frame"] == -1).all() else "o"
+            size = 42 if marker == "x" else 8
+            alpha = 0.9 if marker == "x" else 0.6
+            lw = 1.5 if marker == "x" else 0.0
+            zorder = 10 if marker == "x" else 2
+            color = reference_colors.get(str(tr)) if marker == "x" else None
+            ax.scatter(
+                sub["PC1"],
+                sub["PC2"],
+                s=size,
+                alpha=alpha,
+                marker=marker,
+                linewidths=lw,
+                label=str(tr),
+                zorder=zorder,
+                color=color if color is not None else None,
+            )
+    ax.set_xlabel("PC1")
+    ax.set_ylabel("PC2")
+    if axis_limits is not None:
+        (xmin, xmax), (ymin, ymax) = axis_limits
+        ax.set_xlim(xmin, xmax)
+        ax.set_ylim(ymin, ymax)
+    ax.legend(loc="best")
+    _save_plot(cfg, fig, dirs["figures"] / "pca_scatter")
+    plt.close(fig)
+
+    for traj_name, sub in scores.groupby("trajectory"):
+        if str(traj_name) in set(refs_only["trajectory"].astype(str).tolist()):
+            continue
+        sub = sub[sub["PC1"].notna() & sub["PC2"].notna()]
+        if len(sub) == 0:
+            continue
+        fig_t, ax_t = plt.subplots(figsize=(6, 6))
+        normal = sub[sub["frame"] != -1]
+        if len(normal) > 0:
+            ax_t.scatter(normal["PC1"], normal["PC2"], s=8, alpha=0.6, marker="o", linewidths=0.0, label=str(traj_name), zorder=2)
+        if len(refs_only) > 0:
+            for ref_name, sub_ref in refs_only.groupby("trajectory"):
+                ref_color = reference_colors.get(str(ref_name), "red")
+                ax_t.scatter(
+                    sub_ref["PC1"],
+                    sub_ref["PC2"],
+                    s=42,
+                    alpha=0.9,
+                    marker="x",
+                    linewidths=1.5,
+                    color=ref_color,
+                    label=str(ref_name),
+                    zorder=10,
+                )
+        ax_t.set_xlabel("PC1")
+        ax_t.set_ylabel("PC2")
+        if axis_limits is not None:
+            (xmin, xmax), (ymin, ymax) = axis_limits
+            ax_t.set_xlim(xmin, xmax)
+            ax_t.set_ylim(ymin, ymax)
+        ax_t.legend(loc="best")
+        _save_plot(cfg, fig_t, dirs["figures"] / f"pca_scatter_{traj_name}")
+        plt.close(fig_t)
+
+    if cfg.pca.free_energy_enabled:
+        _plot_pca_free_energy_rt(
+            cfg,
+            scores,
+            dirs["figures"] / "pca_free_energy_rt",
+            "PCA Free Energy Landscape (RT)",
+            axis_limits=axis_limits,
+            reference_colors=reference_colors,
+        )
+        if cfg.pca.free_energy_per_trajectory:
+            for traj_name, sub in scores.groupby("trajectory"):
+                if (sub["frame"] == -1).all():
+                    continue
+                sub_with_refs = pd.concat([sub, refs_only], ignore_index=True) if len(refs_only) > 0 else sub
+                _plot_pca_free_energy_rt(
+                    cfg,
+                    sub_with_refs,
+                    dirs["figures"] / f"pca_free_energy_rt_{traj_name}",
+                    f"PCA Free Energy Landscape (RT): {traj_name}",
+                    axis_limits=axis_limits,
+                    reference_colors=reference_colors,
+                )
+
+
 def run_pca(ctx: RunContext) -> None:
     _, np, pd, plt = _imports()
     from MDAnalysis.analysis.align import AlignTraj
@@ -458,97 +560,4 @@ def run_pca(ctx: RunContext) -> None:
             f"Computed components: {n_comp}. This often happens when too few frames are available "
             "(e.g., single-frame PDB trajectory) or the feature space rank is too low."
         )
-    axis_limits = _pc12_axis_limits(scores, cfg)
-    refs_only = scores[(scores["frame"] == -1) & scores["PC1"].notna() & scores["PC2"].notna()]
-    reference_colors: dict[str, Any] = {}
-    if len(refs_only) > 0:
-        cmap_refs = plt.get_cmap("tab10")
-        ref_names = sorted(set(str(v) for v in refs_only["trajectory"].tolist()))
-        reference_colors = {name: cmap_refs(i % 10) for i, name in enumerate(ref_names)}
-
-    fig, ax = plt.subplots(figsize=(6, 6))
-    for tr, sub in scores.groupby("trajectory"):
-        if "PC1" in sub and "PC2" in sub:
-            marker = "x" if (sub["frame"] == -1).all() else "o"
-            size = 42 if marker == "x" else 8
-            alpha = 0.9 if marker == "x" else 0.6
-            lw = 1.5 if marker == "x" else 0.0
-            zorder = 10 if marker == "x" else 2
-            color = reference_colors.get(str(tr)) if marker == "x" else None
-            ax.scatter(
-                sub["PC1"],
-                sub["PC2"],
-                s=size,
-                alpha=alpha,
-                marker=marker,
-                linewidths=lw,
-                label=str(tr),
-                zorder=zorder,
-                color=color if color is not None else None,
-            )
-    ax.set_xlabel("PC1")
-    ax.set_ylabel("PC2")
-    if axis_limits is not None:
-        (xmin, xmax), (ymin, ymax) = axis_limits
-        ax.set_xlim(xmin, xmax)
-        ax.set_ylim(ymin, ymax)
-    ax.legend(loc="best")
-    _save_plot(cfg, fig, dirs["figures"] / "pca_scatter")
-    plt.close(fig)
-
-    for traj_name, sub in scores.groupby("trajectory"):
-        if str(traj_name) in set(refs_only["trajectory"].astype(str).tolist()):
-            continue
-        sub = sub[sub["PC1"].notna() & sub["PC2"].notna()]
-        if len(sub) == 0:
-            continue
-        fig_t, ax_t = plt.subplots(figsize=(6, 6))
-        normal = sub[sub["frame"] != -1]
-        if len(normal) > 0:
-            ax_t.scatter(normal["PC1"], normal["PC2"], s=8, alpha=0.6, marker="o", linewidths=0.0, label=str(traj_name), zorder=2)
-        if len(refs_only) > 0:
-            for ref_name, sub_ref in refs_only.groupby("trajectory"):
-                ref_color = reference_colors.get(str(ref_name), "red")
-                ax_t.scatter(
-                    sub_ref["PC1"],
-                    sub_ref["PC2"],
-                    s=42,
-                    alpha=0.9,
-                    marker="x",
-                    linewidths=1.5,
-                    color=ref_color,
-                    label=str(ref_name),
-                    zorder=10,
-                )
-        ax_t.set_xlabel("PC1")
-        ax_t.set_ylabel("PC2")
-        if axis_limits is not None:
-            (xmin, xmax), (ymin, ymax) = axis_limits
-            ax_t.set_xlim(xmin, xmax)
-            ax_t.set_ylim(ymin, ymax)
-        ax_t.legend(loc="best")
-        _save_plot(cfg, fig_t, dirs["figures"] / f"pca_scatter_{traj_name}")
-        plt.close(fig_t)
-
-    if cfg.pca.free_energy_enabled:
-        _plot_pca_free_energy_rt(
-            cfg,
-            scores,
-            dirs["figures"] / "pca_free_energy_rt",
-            "PCA Free Energy Landscape (RT)",
-            axis_limits=axis_limits,
-            reference_colors=reference_colors,
-        )
-        if cfg.pca.free_energy_per_trajectory:
-            for traj_name, sub in scores.groupby("trajectory"):
-                if (sub["frame"] == -1).all():
-                    continue
-                sub_with_refs = pd.concat([sub, refs_only], ignore_index=True) if len(refs_only) > 0 else sub
-                _plot_pca_free_energy_rt(
-                    cfg,
-                    sub_with_refs,
-                    dirs["figures"] / f"pca_free_energy_rt_{traj_name}",
-                    f"PCA Free Energy Landscape (RT): {traj_name}",
-                    axis_limits=axis_limits,
-                    reference_colors=reference_colors,
-                )
+    plot_pca_from_scores(cfg, scores, ctx.outdir)

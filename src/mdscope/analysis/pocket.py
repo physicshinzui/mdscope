@@ -136,6 +136,50 @@ def _parse_fpocket_info(info_path: Path, structure_id: str) -> list[dict[str, An
     return rows
 
 
+def plot_pocket_from_tables(cfg, pockets_df, outdir) -> list[str]:
+    _, np, pd, plt = _imports()
+    dirs = ensure_dirs(outdir)
+    rendered: list[str] = []
+    if len(pockets_df) == 0:
+        return rendered
+
+    for col, stem, xlabel in [
+        ("score", "pocket_fpocket_score_distribution", "fpocket score"),
+        ("volume", "pocket_fpocket_volume_distribution", "pocket volume"),
+    ]:
+        if col not in pockets_df.columns:
+            continue
+        values = pd.to_numeric(pockets_df[col], errors="coerce").dropna().to_numpy()
+        if len(values) == 0:
+            continue
+        fig, ax = plt.subplots(figsize=(6.8, 4.5))
+        ax.hist(values, bins=_auto_hist_bins(values, method="fd"), color="#4c78a8", alpha=0.85)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("count")
+        _save_plot(cfg, fig, dirs["figures"] / stem)
+        plt.close(fig)
+        rendered.append(stem)
+
+    pcfg = cfg.pocket
+    rank_col = pcfg.rank_by if pcfg.rank_by in pockets_df.columns else "score"
+    vals_df = pockets_df.copy()
+    vals_df[rank_col] = pd.to_numeric(vals_df[rank_col], errors="coerce")
+    top_by_structure = vals_df.groupby("structure_id")[rank_col].max().dropna()
+    if len(top_by_structure) > 0:
+        fig, ax = plt.subplots(figsize=(7.2, 4.5))
+        xs = np.arange(len(top_by_structure))
+        ax.bar(xs, top_by_structure.to_numpy(), color="#59a14f")
+        ax.set_xticks(xs)
+        ax.set_xticklabels(top_by_structure.index.tolist(), rotation=70, ha="right", fontsize=8)
+        ax.set_xlabel("structure")
+        ax.set_ylabel(f"max {rank_col}")
+        _save_plot(cfg, fig, dirs["figures"] / "pocket_fpocket_presence_by_structure")
+        plt.close(fig)
+        rendered.append("pocket_fpocket_presence_by_structure")
+
+    return rendered
+
+
 def run_pocket(ctx: RunContext) -> None:
     _, np, pd, plt = _imports()
     import shutil
@@ -246,33 +290,4 @@ def run_pocket(ctx: RunContext) -> None:
     (dirs["data"] / "pocket_fpocket_report.json").write_text(json.dumps(report, indent=2))
 
     if len(pockets_df) > 0:
-        for col, stem, xlabel in [
-            ("score", "pocket_fpocket_score_distribution", "fpocket score"),
-            ("volume", "pocket_fpocket_volume_distribution", "pocket volume"),
-        ]:
-            if col not in pockets_df.columns:
-                continue
-            values = pd.to_numeric(pockets_df[col], errors="coerce").dropna().to_numpy()
-            if len(values) == 0:
-                continue
-            fig, ax = plt.subplots(figsize=(6.8, 4.5))
-            ax.hist(values, bins=_auto_hist_bins(values, method="fd"), color="#4c78a8", alpha=0.85)
-            ax.set_xlabel(xlabel)
-            ax.set_ylabel("count")
-            _save_plot(cfg, fig, dirs["figures"] / stem)
-            plt.close(fig)
-
-        rank_col = pcfg.rank_by if pcfg.rank_by in pockets_df.columns else "score"
-        vals_df = pockets_df.copy()
-        vals_df[rank_col] = pd.to_numeric(vals_df[rank_col], errors="coerce")
-        top_by_structure = vals_df.groupby("structure_id")[rank_col].max().dropna()
-        if len(top_by_structure) > 0:
-            fig, ax = plt.subplots(figsize=(7.2, 4.5))
-            xs = np.arange(len(top_by_structure))
-            ax.bar(xs, top_by_structure.to_numpy(), color="#59a14f")
-            ax.set_xticks(xs)
-            ax.set_xticklabels(top_by_structure.index.tolist(), rotation=70, ha="right", fontsize=8)
-            ax.set_xlabel("structure")
-            ax.set_ylabel(f"max {rank_col}")
-            _save_plot(cfg, fig, dirs["figures"] / "pocket_fpocket_presence_by_structure")
-            plt.close(fig)
+        plot_pocket_from_tables(cfg, pockets_df, ctx.outdir)

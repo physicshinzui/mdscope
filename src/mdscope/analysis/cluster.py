@@ -3,6 +3,52 @@ from __future__ import annotations
 from ._common import RunContext, _imports, _save_plot, ensure_dirs
 
 
+def plot_cluster_from_tables(cfg, scores, labels_df, outdir) -> None:
+    _, _, _, plt = _imports()
+    dirs = ensure_dirs(outdir)
+    merged = scores.merge(labels_df[["trajectory", "frame", "label", "cluster_name"]], on=["trajectory", "frame"], how="left")
+    fig, ax = plt.subplots(figsize=(6, 6))
+    cmap = plt.get_cmap("tab10")
+    labels_sorted = sorted(int(v) for v in merged["label"].dropna().unique())
+    color_by_label = {label: cmap(i % 10) for i, label in enumerate(labels_sorted)}
+
+    normal = merged[merged["frame"] != -1]
+    for label, sub in normal.groupby("label"):
+        label_i = int(label)
+        cluster_name = str(sub["cluster_name"].iloc[0]) if "cluster_name" in sub else ("noise" if label_i == -1 else f"cluster_{label_i}")
+        point_size = 6 if label_i == -1 else 10
+        point_alpha = 0.35 if label_i == -1 else 0.7
+        ax.scatter(
+            sub["PC1"],
+            sub["PC2"],
+            s=point_size,
+            alpha=point_alpha,
+            marker="o",
+            linewidths=0.0,
+            color=color_by_label.get(label_i),
+            label=cluster_name,
+        )
+
+    refs = merged[merged["frame"] == -1]
+    for ref_name, sub in refs.groupby("trajectory"):
+        ax.scatter(
+            sub["PC1"],
+            sub["PC2"],
+            s=48,
+            alpha=0.95,
+            marker="x",
+            linewidths=1.6,
+            color="black",
+            label=str(ref_name),
+            zorder=10,
+        )
+    ax.set_xlabel("PC1")
+    ax.set_ylabel("PC2")
+    ax.legend(loc="best")
+    _save_plot(cfg, fig, dirs["figures"] / "pca_scatter_clustered")
+    plt.close(fig)
+
+
 def run_cluster(ctx: RunContext) -> None:
     _, np, pd, plt = _imports()
     import hdbscan
@@ -59,44 +105,4 @@ def run_cluster(ctx: RunContext) -> None:
     )
     summary.to_csv(dirs["tables"] / "cluster_summary.csv", index=False)
 
-    merged = scores.merge(out[["trajectory", "frame", "label", "cluster_name"]], on=["trajectory", "frame"], how="left")
-    fig, ax = plt.subplots(figsize=(6, 6))
-    cmap = plt.get_cmap("tab10")
-    labels_sorted = sorted(int(v) for v in merged["label"].dropna().unique())
-    color_by_label = {label: cmap(i % 10) for i, label in enumerate(labels_sorted)}
-
-    normal = merged[merged["frame"] != -1]
-    for label, sub in normal.groupby("label"):
-        label_i = int(label)
-        cluster_name = str(sub["cluster_name"].iloc[0]) if "cluster_name" in sub else ("noise" if label_i == -1 else f"cluster_{label_i}")
-        point_size = 6 if label_i == -1 else 10
-        point_alpha = 0.35 if label_i == -1 else 0.7
-        ax.scatter(
-            sub["PC1"],
-            sub["PC2"],
-            s=point_size,
-            alpha=point_alpha,
-            marker="o",
-            linewidths=0.0,
-            color=color_by_label.get(label_i),
-            label=cluster_name,
-        )
-
-    refs = merged[merged["frame"] == -1]
-    for ref_name, sub in refs.groupby("trajectory"):
-        ax.scatter(
-            sub["PC1"],
-            sub["PC2"],
-            s=48,
-            alpha=0.95,
-            marker="x",
-            linewidths=1.6,
-            color="black",
-            label=str(ref_name),
-            zorder=10,
-        )
-    ax.set_xlabel("PC1")
-    ax.set_ylabel("PC2")
-    ax.legend(loc="best")
-    _save_plot(cfg, fig, dirs["figures"] / "pca_scatter_clustered")
-    plt.close(fig)
+    plot_cluster_from_tables(cfg, scores, out, ctx.outdir)

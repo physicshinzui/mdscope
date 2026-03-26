@@ -111,6 +111,43 @@ def _plot_water_residence_distribution(cfg: AppConfig, df: Any, out_prefix: Path
     plt.close(fig)
 
 
+def plot_water_from_tables(cfg: AppConfig, outdir: Path) -> list[str]:
+    _, _, pd, _ = _imports()
+    dirs = ensure_dirs(outdir)
+    rendered: list[str] = []
+
+    occ_path = dirs["tables"] / "water_occupancy_timeseries.csv"
+    if occ_path.exists():
+        occ_df = pd.read_csv(occ_path)
+        if len(occ_df) > 0:
+            _plot_timeseries_and_distribution(
+                cfg,
+                occ_df,
+                "frame",
+                "water_count",
+                "trajectory",
+                "water_occupancy",
+                "Nearby water count",
+            )
+            rendered.append("water_occupancy")
+
+    rdf_path = dirs["tables"] / "water_rdf.csv"
+    if rdf_path.exists():
+        rdf_df = pd.read_csv(rdf_path)
+        if len(rdf_df) > 0:
+            _plot_water_rdf(cfg, rdf_df, dirs["figures"] / "water_rdf")
+            rendered.append("water_rdf")
+
+    residence_path = dirs["tables"] / "water_residence_events.csv"
+    if residence_path.exists():
+        events_df = pd.read_csv(residence_path)
+        if len(events_df) > 0:
+            _plot_water_residence_distribution(cfg, events_df, dirs["figures"] / "water_residence_duration_distribution")
+            rendered.append("water_residence")
+
+    return rendered
+
+
 def run_water(ctx: RunContext) -> None:
     _, np, pd, _ = _imports()
     from MDAnalysis.analysis.rdf import InterRDF
