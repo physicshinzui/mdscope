@@ -98,8 +98,13 @@ def run_pipeline(
             state.clear_done(step.name)
 
         if resume and state.is_done(step.name) and step.name not in force_steps and not force:
-            print(f"[skip] {step.name}: already done")
-            continue
+            metadata = state.read_metadata(step.name) or {}
+            stored_hash = metadata.get("config_hash")
+            if stored_hash == cfg_hash:
+                print(f"[skip] {step.name}: already done")
+                continue
+            state.clear_done(step.name)
+            print(f"[rerun] {step.name}: config changed")
 
         unmet = [dep for dep in step.deps if dep in [s.name for s in steps] and not state.is_done(dep)]
         if unmet:

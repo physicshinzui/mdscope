@@ -52,3 +52,53 @@ def test_resume_skips_done(tmp_path: Path, monkeypatch) -> None:
         until_step=None,
     )
     assert done.exists()
+
+
+def test_resume_reruns_when_config_hash_changes(tmp_path: Path, monkeypatch) -> None:
+    top = tmp_path / "top.pdb"
+    trj = tmp_path / "traj.xtc"
+    top.write_text("x")
+    trj.write_text("x")
+
+    cfg = AppConfig.model_validate(
+        {
+            "system": {
+                "topology": str(top),
+                "trajectories": [str(trj)],
+                "trajectory_names": ["traj0"],
+            },
+            "output": {"outdir": str(tmp_path / "results")},
+            "analyses": {"rmsd": True},
+        }
+    )
+
+    calls: list[str] = []
+
+    def _record_execute_step(step: str, ctx) -> None:
+        calls.append(step)
+
+    monkeypatch.setattr(pipeline, "execute_step", _record_execute_step)
+
+    pipeline.run_pipeline(
+        config=cfg,
+        config_text="a",
+        resume=False,
+        force=False,
+        only={"rmsd"},
+        force_steps=set(),
+        from_step=None,
+        until_step=None,
+    )
+    assert calls == ["rmsd"]
+
+    pipeline.run_pipeline(
+        config=cfg,
+        config_text="b",
+        resume=True,
+        force=False,
+        only={"rmsd"},
+        force_steps=set(),
+        from_step=None,
+        until_step=None,
+    )
+    assert calls == ["rmsd", "rmsd"]

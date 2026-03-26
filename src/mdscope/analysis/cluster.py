@@ -14,9 +14,12 @@ def run_cluster(ctx: RunContext) -> None:
         raise RuntimeError("pca_scores.csv not found; run pca step first")
 
     scores = pd.read_csv(scores_path)
+    normal_scores = scores[scores["frame"] >= 0].copy()
+    if len(normal_scores) == 0:
+        raise RuntimeError("No trajectory frames available for clustering; pca_scores.csv only contains reference points")
     pcs = [f"PC{i}" for i in cfg.pca.use_pcs]
-    pcs = [c for c in pcs if c in scores.columns]
-    X = scores[pcs].to_numpy()
+    pcs = [c for c in pcs if c in normal_scores.columns]
+    X = normal_scores[pcs].to_numpy()
 
     clusterer = hdbscan.HDBSCAN(
         min_cluster_size=cfg.cluster.min_cluster_size,
@@ -27,7 +30,7 @@ def run_cluster(ctx: RunContext) -> None:
     )
     labels = clusterer.fit_predict(X)
 
-    out = scores[["trajectory", "frame"]].copy()
+    out = normal_scores[["trajectory", "frame"]].copy()
     out["label"] = labels
     out["probability"] = getattr(clusterer, "probabilities_", np.zeros(len(out)))
 
@@ -81,7 +84,6 @@ def run_cluster(ctx: RunContext) -> None:
 
     refs = merged[merged["frame"] == -1]
     for ref_name, sub in refs.groupby("trajectory"):
-        label_i = int(sub["label"].iloc[0])
         ax.scatter(
             sub["PC1"],
             sub["PC2"],
@@ -89,7 +91,7 @@ def run_cluster(ctx: RunContext) -> None:
             alpha=0.95,
             marker="x",
             linewidths=1.6,
-            color=color_by_label.get(label_i),
+            color="black",
             label=str(ref_name),
             zorder=10,
         )

@@ -17,6 +17,16 @@ class StateStore:
     def is_done(self, step: str) -> bool:
         return (self.state_dir / f"{step}.done").exists()
 
+    def read_metadata(self, step: str) -> dict[str, Any] | None:
+        path = self.state_dir / f"{step}.meta.json"
+        if not path.exists():
+            return None
+        try:
+            payload = json.loads(path.read_text())
+        except Exception:
+            return None
+        return payload if isinstance(payload, dict) else None
+
     def mark_done(self, step: str, metadata: dict[str, Any]) -> None:
         (self.state_dir / f"{step}.done").write_text("done\n")
         (self.state_dir / f"{step}.meta.json").write_text(json.dumps(metadata, indent=2))
