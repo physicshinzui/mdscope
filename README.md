@@ -17,6 +17,9 @@ Config-first MD trajectory analysis automation tool built on MDAnalysis.
   - `sasa` (optional dependency)
   - `distance`
   - `ramachandran`
+  - `convergence`
+  - `pocket` (fpocket backend)
+  - `water`
 - Publication-oriented plotting defaults (multi-format + DPI control)
 
 ## Dependencies
@@ -153,6 +156,9 @@ mdscope run -c config.yaml --only rmsd pca cluster
 mdscope run -c config.yaml --only rmsd pca cluster representative
 ```
 
+`--only` selects target steps, and required upstream dependencies are included automatically.
+For example, `--only pocket` will also run any prerequisite steps needed to produce pocket inputs.
+
 ## Input Model
 
 `system` supports:
@@ -253,6 +259,12 @@ If a step fails:
   - `mdscope run -c config.yaml --resume`
 - Re-run one step:
   - `mdscope run -c config.yaml --only pca --force-step pca`
+
+Notes:
+
+- `--resume` reuses completed steps only when the saved step metadata matches the current config content.
+- If the config changed for a completed step, that step is re-run automatically.
+- `pocket.input_mode: representatives` depends on representative structures generated from upstream clustering.
 
 ## Development
 
