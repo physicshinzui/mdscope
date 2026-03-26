@@ -11,7 +11,10 @@ from .config import PRESETS, generate_template, load_config
 from .pipeline import run_pipeline
 from .plotting import apply_publication_style
 
-app = typer.Typer(help="MD trajectory analysis automation (config-first)")
+app = typer.Typer(
+    help="MD trajectory analysis automation (config-first)",
+    context_settings={"help_option_names": ["--help", "-h"]},
+)
 
 
 @app.command("init-config")
