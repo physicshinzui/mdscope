@@ -9,7 +9,7 @@ from mdscope.config import AppConfig
 
 def test_run_water_phase1_with_repo_data(tmp_path: Path) -> None:
     data_dir = Path("tests/data/ace-a-nme-with-water")
-    top = data_dir / "ace-a-nme.gro"
+    top = data_dir / "ace-A-nme.gro"
     trj = data_dir / "hrex_pbc_corrected.xtc"
     assert top.exists()
     assert trj.exists()
