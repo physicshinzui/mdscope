@@ -143,6 +143,26 @@ def _build_site_atom_map(
     return atom_map, strategy, len(mapping), residue_pairs
 
 
+def _append_unique_atom_pairs(
+    fit_atoms: Any,
+    ref_atoms: Any,
+    fit_indices: list[int],
+    ref_indices: list[int],
+    seen_fit: set[int],
+    seen_ref: set[int],
+) -> None:
+    fit_by_name = {str(a.name): int(a.index) for a in fit_atoms}
+    for a in ref_atoms:
+        fit_idx = fit_by_name.get(str(a.name))
+        ref_idx = int(a.index)
+        if fit_idx is None or fit_idx in seen_fit or ref_idx in seen_ref:
+            continue
+        seen_fit.add(fit_idx)
+        seen_ref.add(ref_idx)
+        fit_indices.append(fit_idx)
+        ref_indices.append(ref_idx)
+
+
 def _plot_pca_free_energy_rt(
     cfg: Any,
     scores: Any,
@@ -527,18 +547,21 @@ def run_pca(ctx: RunContext) -> None:
             )
             fit_align_idx: list[int] = []
             ref_align_idx: list[int] = []
+            seen_fit_idx: set[int] = set()
+            seen_ref_idx: set[int] = set()
             for fit_i, ref_i in mapping:
                 fit_atoms = fit_res[fit_i].atoms.select_atoms(align_sel)
                 ref_atoms = ref_res[ref_i].atoms.select_atoms(align_sel)
                 if len(fit_atoms) == 0 or len(ref_atoms) == 0:
                     continue
-                fit_by_name = {str(a.name): int(a.index) for a in fit_atoms}
-                for a in ref_atoms:
-                    fit_idx = fit_by_name.get(str(a.name))
-                    if fit_idx is None:
-                        continue
-                    fit_align_idx.append(fit_idx)
-                    ref_align_idx.append(int(a.index))
+                _append_unique_atom_pairs(
+                    fit_atoms=fit_atoms,
+                    ref_atoms=ref_atoms,
+                    fit_indices=fit_align_idx,
+                    ref_indices=ref_align_idx,
+                    seen_fit=seen_fit_idx,
+                    seen_ref=seen_ref_idx,
+                )
             if len(fit_align_idx) >= 3:
                 fit_align_ag = fit_u.atoms[fit_align_idx]
                 ref_align_ag = ref_u.atoms[ref_align_idx]
