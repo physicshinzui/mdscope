@@ -85,6 +85,7 @@ def _collect_distance_matrix_from_atom_indices(u: Any, atom_indices: list[int], 
 def _build_site_atom_map(
     mobile_universe: Any,
     reference_universe: Any,
+    source_label: str,
     align_selection: str,
     map_mode: str,
     atom_selection: str,
@@ -102,14 +103,30 @@ def _build_site_atom_map(
     atom_map: dict[tuple[str, int, str], int] = {}
     residue_pairs: list[dict[str, Any]] = []
     for mob_i, ref_i in mapping:
+        ref_chain = str(ref_res[ref_i].segid)
+        ref_resid = int(ref_res[ref_i].resid)
+        ref_resname = str(ref_res[ref_i].resname)
+        mob_chain = str(mob_res[mob_i].segid)
+        mob_resid = int(mob_res[mob_i].resid)
+        mob_resname = str(mob_res[mob_i].resname)
+        if mob_chain != ref_chain:
+            print(
+                f"[warn] PCA site mapping chain mismatch for {source_label}: "
+                f"{ref_chain}:{ref_resid} {ref_resname} -> {mob_chain}:{mob_resid} {mob_resname}"
+            )
+        if mob_resname != ref_resname:
+            print(
+                f"[warn] PCA site mapping residue-name mismatch for {source_label}: "
+                f"{ref_chain}:{ref_resid} {ref_resname} -> {mob_chain}:{mob_resid} {mob_resname}"
+            )
         residue_pairs.append(
             {
-                "reference_chain": str(ref_res[ref_i].segid),
-                "reference_resid": int(ref_res[ref_i].resid),
-                "reference_resname": str(ref_res[ref_i].resname),
-                "mobile_chain": str(mob_res[mob_i].segid),
-                "mobile_resid": int(mob_res[mob_i].resid),
-                "mobile_resname": str(mob_res[mob_i].resname),
+                "reference_chain": ref_chain,
+                "reference_resid": ref_resid,
+                "reference_resname": ref_resname,
+                "mobile_chain": mob_chain,
+                "mobile_resid": mob_resid,
+                "mobile_resname": mob_resname,
             }
         )
         mob_atoms = mob_res[mob_i].atoms.select_atoms(atom_selection)
@@ -413,6 +430,7 @@ def run_pca(ctx: RunContext) -> None:
             atom_map, strategy, mapped_residue_count, residue_pairs = _build_site_atom_map(
                 mobile_universe=u,
                 reference_universe=site_ref_u,
+                source_label=name,
                 align_selection=cfg.pca.site_align_selection,
                 map_mode=cfg.pca.site_map_mode,
                 atom_selection=cfg.pca.site_atom_selection,
@@ -550,6 +568,7 @@ def run_pca(ctx: RunContext) -> None:
             ref_atom_map, strategy, mapped_residue_count, residue_pairs = _build_site_atom_map(
                 mobile_universe=ref_u,
                 reference_universe=site_ref_u,
+                source_label=ref_name,
                 align_selection=cfg.pca.site_align_selection,
                 map_mode=cfg.pca.site_map_mode,
                 atom_selection=cfg.pca.site_atom_selection,
