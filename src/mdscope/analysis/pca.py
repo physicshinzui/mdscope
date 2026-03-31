@@ -82,6 +82,50 @@ def _collect_distance_matrix_from_atom_indices(u: Any, atom_indices: list[int], 
     return np.vstack(rows), frames
 
 
+def _build_site_atom_map(
+    mobile_universe: Any,
+    reference_universe: Any,
+    align_selection: str,
+    map_mode: str,
+    atom_selection: str,
+    reference_resindices: set[int],
+    map_file: Path | None = None,
+) -> tuple[dict[tuple[str, int, str], int], str, int, list[dict[str, Any]]]:
+    mob_res, ref_res, mapping, strategy = build_residue_mapping(
+        mobile_universe=mobile_universe,
+        reference_universe=reference_universe,
+        align_selection=align_selection,
+        map_mode=map_mode,
+        map_file=map_file,
+    )
+    mapping = filter_mapping_to_reference_resindices(mapping, ref_res, reference_resindices)
+    atom_map: dict[tuple[str, int, str], int] = {}
+    residue_pairs: list[dict[str, Any]] = []
+    for mob_i, ref_i in mapping:
+        residue_pairs.append(
+            {
+                "reference_chain": str(ref_res[ref_i].segid),
+                "reference_resid": int(ref_res[ref_i].resid),
+                "reference_resname": str(ref_res[ref_i].resname),
+                "mobile_chain": str(mob_res[mob_i].segid),
+                "mobile_resid": int(mob_res[mob_i].resid),
+                "mobile_resname": str(mob_res[mob_i].resname),
+            }
+        )
+        mob_atoms = mob_res[mob_i].atoms.select_atoms(atom_selection)
+        ref_atoms = ref_res[ref_i].atoms.select_atoms(atom_selection)
+        if len(mob_atoms) == 0 or len(ref_atoms) == 0:
+            continue
+        ref_name_to_atom = {str(a.name): a for a in ref_atoms}
+        for ma in mob_atoms:
+            ra = ref_name_to_atom.get(str(ma.name))
+            if ra is None:
+                continue
+            key = (str(ra.segid), int(ra.resid), str(ra.name))
+            atom_map[key] = int(ma.index)
+    return atom_map, strategy, len(mapping), residue_pairs
+
+
 def _plot_pca_free_energy_rt(
     cfg: Any,
     scores: Any,
@@ -349,58 +393,46 @@ def run_pca(ctx: RunContext) -> None:
                 in_memory=True,
             ).run(start=cfg.frames.start, stop=cfg.frames.stop, step=cfg.frames.step)
 
+    site_ref_u: Any | None = None
     site_key_order: list[tuple[str, int, str]] | None = None
+    ref_site_res: set[int] | None = None
     if cfg.pca.site_from_reference_ligand:
         site_ref_path = cfg.pca.site_reference_pdb or cfg.rmsd.reference
         if site_ref_path is None:
             raise RuntimeError("pca.site_reference_pdb or rmsd.reference is required when pca.site_from_reference_ligand=true")
         if not cfg.pca.site_ligand_selection:
             raise RuntimeError("pca.site_ligand_selection is required when pca.site_from_reference_ligand=true")
-        ref_u = _imports()[0].Universe(str(site_ref_path))
-        ref_site_res = ligand_site_resindices(ref_u, cfg.pca.site_ligand_selection, cfg.pca.site_cutoff)
+        site_ref_u = _imports()[0].Universe(str(site_ref_path))
+        ref_site_res = ligand_site_resindices(site_ref_u, cfg.pca.site_ligand_selection, cfg.pca.site_cutoff)
         if not ref_site_res:
             raise RuntimeError("No reference ligand-site residues for PCA site mode")
 
         atom_idx_by_traj: dict[str, dict[tuple[str, int, str], int]] = {}
         map_rows = []
         for name, u in universes:
-            mob_res, ref_res, mapping, strategy = build_residue_mapping(
+            atom_map, strategy, mapped_residue_count, residue_pairs = _build_site_atom_map(
                 mobile_universe=u,
-                reference_universe=ref_u,
+                reference_universe=site_ref_u,
                 align_selection=cfg.pca.site_align_selection,
                 map_mode=cfg.pca.site_map_mode,
+                atom_selection=cfg.pca.site_atom_selection,
+                reference_resindices=ref_site_res,
                 map_file=cfg.pca.site_map_file,
             )
-            mapping = filter_mapping_to_reference_resindices(mapping, ref_res, ref_site_res)
-            if len(mapping) < 1:
+            if mapped_residue_count < 1:
                 raise RuntimeError(f"No mapped ligand-site residues for trajectory: {name}")
 
-            atom_map: dict[tuple[str, int, str], int] = {}
-            for mob_i, ref_i in mapping:
-                mob_atoms = mob_res[mob_i].atoms.select_atoms(cfg.pca.site_atom_selection)
-                ref_atoms = ref_res[ref_i].atoms.select_atoms(cfg.pca.site_atom_selection)
-                if len(mob_atoms) == 0 or len(ref_atoms) == 0:
-                    continue
-                ref_name_to_atom = {str(a.name): a for a in ref_atoms}
-                for ma in mob_atoms:
-                    ra = ref_name_to_atom.get(str(ma.name))
-                    if ra is None:
-                        continue
-                    key = (str(ra.segid), int(ra.resid), str(ra.name))
-                    atom_map[key] = int(ma.index)
-                map_rows.append(
-                    {
-                        "trajectory": name,
-                        "mapping_strategy": strategy,
-                        "target_resid": int(mob_res[mob_i].resid),
-                        "target_chain": str(mob_res[mob_i].segid),
-                        "ref_resid": int(ref_res[ref_i].resid),
-                        "ref_chain": str(ref_res[ref_i].segid),
-                        "status": "mapped",
-                    }
-                )
-
             atom_idx_by_traj[name] = atom_map
+            map_rows.append(
+                {
+                    "trajectory": name,
+                    "mapping_strategy": strategy,
+                    "mapped_site_residues": mapped_residue_count,
+                    "mapped_site_atoms": len(atom_map),
+                    "used_site_residues": residue_pairs,
+                    "status": "mapped" if atom_map else "no_atoms",
+                }
+            )
 
         common_keys = set.intersection(*[set(v.keys()) for v in atom_idx_by_traj.values()]) if atom_idx_by_traj else set()
         if len(common_keys) < 3:
@@ -458,9 +490,11 @@ def run_pca(ctx: RunContext) -> None:
                 row[f"PC{pc_i + 1}"] = float(sc[idx, pc_i])
             scores_rows.append(row)
 
+    reference_projection_rows = []
     for idx, pdb_path in enumerate(cfg.pca.reference_pdbs):
         mda, _, _, _ = _imports()
         ref_u = mda.Universe(str(pdb_path))
+        ref_name = cfg.pca.reference_names[idx] if idx < len(cfg.pca.reference_names) else pdb_path.stem
 
         if cfg.pca.align:
             from MDAnalysis.analysis.align import alignto
@@ -509,15 +543,40 @@ def run_pca(ctx: RunContext) -> None:
         if cfg.pca.site_from_reference_ligand:
             if site_key_order is None:
                 raise RuntimeError("Internal error: missing site key order for PCA site mode")
-            ref_atoms = ref_u.select_atoms(cfg.pca.site_atom_selection)
-            ref_key_to_pos = {(str(a.segid), int(a.resid), str(a.name)): a.position.copy() for a in ref_atoms}
-            missing = [k for k in site_key_order if k not in ref_key_to_pos]
+            if ref_site_res is None:
+                raise RuntimeError("Internal error: missing site residue set for PCA site mode")
+            if site_ref_u is None:
+                raise RuntimeError("Internal error: missing site reference universe for PCA site mode")
+            ref_atom_map, strategy, mapped_residue_count, residue_pairs = _build_site_atom_map(
+                mobile_universe=ref_u,
+                reference_universe=site_ref_u,
+                align_selection=cfg.pca.site_align_selection,
+                map_mode=cfg.pca.site_map_mode,
+                atom_selection=cfg.pca.site_atom_selection,
+                reference_resindices=ref_site_res,
+                map_file=cfg.pca.site_map_file,
+            )
+            missing = [k for k in site_key_order if k not in ref_atom_map]
             if missing:
-                raise RuntimeError(
-                    f"PCA reference atom mapping mismatch for {pdb_path}: "
-                    f"{len(missing)} site atoms are missing for selection '{cfg.pca.site_atom_selection}'."
+                print(
+                    f"[warn] skipping PCA reference projection for {pdb_path}: "
+                    f"could not map {len(missing)} site atoms from the site reference "
+                    f"using mode '{cfg.pca.site_map_mode}'."
                 )
-            coords = [ref_key_to_pos[k] for k in site_key_order]
+                reference_projection_rows.append(
+                    {
+                        "reference_name": ref_name,
+                        "reference_pdb": str(pdb_path),
+                        "mapping_strategy": strategy,
+                        "mapped_site_residues": mapped_residue_count,
+                        "mapped_site_atoms": len(ref_atom_map),
+                        "missing_site_atoms": len(missing),
+                        "used_site_residues": residue_pairs,
+                        "status": "skipped",
+                    }
+                )
+                continue
+            coords = [ref_u.atoms[ref_atom_map[k]].position.copy() for k in site_key_order]
             ref_coords = np.array(coords)
             if feature_mode == "distance":
                 ref_vec = _pairwise_distance_vector(ref_coords).reshape(1, -1)
@@ -549,11 +608,22 @@ def run_pca(ctx: RunContext) -> None:
                     )
                 ref_vec = ref_atoms.positions.reshape(1, -1)
         ref_sc = pca.transform(ref_vec)
-        ref_name = cfg.pca.reference_names[idx] if idx < len(cfg.pca.reference_names) else pdb_path.stem
         row = {"trajectory": ref_name, "frame": -1}
         for pc_i in range(ref_sc.shape[1]):
             row[f"PC{pc_i + 1}"] = float(ref_sc[0, pc_i])
         scores_rows.append(row)
+        reference_projection_rows.append(
+            {
+                "reference_name": ref_name,
+                "reference_pdb": str(pdb_path),
+                "mapping_strategy": strategy if cfg.pca.site_from_reference_ligand else "direct_selection",
+                "mapped_site_residues": mapped_residue_count if cfg.pca.site_from_reference_ligand else None,
+                "mapped_site_atoms": len(site_key_order) if cfg.pca.site_from_reference_ligand and site_key_order is not None else None,
+                "missing_site_atoms": 0 if cfg.pca.site_from_reference_ligand else None,
+                "used_site_residues": residue_pairs if cfg.pca.site_from_reference_ligand else None,
+                "status": "projected",
+            }
+        )
 
     scores = pd.DataFrame(scores_rows)
     scores.to_csv(dirs["tables"] / "pca_scores.csv", index=False)
@@ -570,6 +640,7 @@ def run_pca(ctx: RunContext) -> None:
             indent=2,
         )
     )
+    (dirs["data"] / "pca_reference_projection_report.json").write_text(json.dumps(reference_projection_rows, indent=2))
     if "PC1" not in scores.columns or "PC2" not in scores.columns:
         n_comp = int(getattr(pca, "n_components_", pca.n_components))
         raise RuntimeError(
