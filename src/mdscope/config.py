@@ -768,6 +768,7 @@ pca:
   align: true
   # Atom selection flattened into PCA input vectors.
   selection: backbone
+  # mdscope also writes `data/pca_atom_selections.pml` so the exact PCA atom set can be re-selected in PyMOL.
   # Maximum principal components to compute.
   n_components: 10
   # Components used downstream for clustering (1-based indexing in config).
@@ -805,6 +806,7 @@ pca:
   site_cutoff: 5.0
   # Atom selection within mapped site residues used as PCA coordinates.
   site_atom_selection: name CA
+  # In site-PCA mode, the emitted PyMOL commands reproduce the final mapped common atom set for each trajectory.
   # Selection used for trajectory alignment in site-PCA mode.
   site_align_selection: protein and name CA
   site_map_mode: align  # strict | align | user_map

@@ -22,6 +22,113 @@ REFERENCE_COLORS = [
 ]
 
 
+def _pymol_scope_from_atom(atom: Any) -> tuple[str, str]:
+    chain_id = str(getattr(atom, "chainID", "") or "").strip()
+    segid = str(getattr(atom, "segid", "") or "").strip()
+    if chain_id:
+        return ("chain", chain_id)
+    if segid:
+        return ("segi", segid)
+    return ("", "")
+
+
+def _pymol_selection_from_atoms(atoms: Any) -> str:
+    grouped: dict[tuple[str, str, int, str], set[str]] = {}
+    for atom in atoms:
+        scope_key, scope_value = _pymol_scope_from_atom(atom)
+        key = (scope_key, scope_value, int(atom.resid), str(atom.resname))
+        grouped.setdefault(key, set()).add(str(atom.name))
+
+    clauses: list[str] = []
+    for scope_key, scope_value, resid, resname in sorted(grouped):
+        parts = []
+        if scope_key and scope_value:
+            parts.append(f"{scope_key} {scope_value}")
+        parts.append(f"resi {resid}")
+        if resname:
+            parts.append(f"resn {resname}")
+        atom_names = "+".join(sorted(grouped[(scope_key, scope_value, resid, resname)]))
+        parts.append(f"name {atom_names}")
+        clauses.append("(" + " and ".join(parts) + ")")
+    return " or ".join(clauses) if clauses else "none"
+
+
+def _sanitize_pymol_object_name(name: str) -> str:
+    safe = "".join(ch if ch.isalnum() or ch == "_" else "_" for ch in str(name))
+    return safe.strip("_") or "selection"
+
+
+def _write_pca_pymol_outputs(
+    dirs: dict[str, Path],
+    cfg: Any,
+    selection_payloads: list[dict[str, Any]],
+) -> None:
+    _write_named_pymol_outputs(
+        dirs=dirs,
+        cfg=cfg,
+        selection_payloads=selection_payloads,
+        command_filename="pca_atom_selections.pml",
+        report_filename="pca_atom_selection_report.json",
+        object_prefix="pca_atoms_",
+    )
+
+
+def _write_pca_reference_pymol_outputs(
+    dirs: dict[str, Path],
+    cfg: Any,
+    selection_payloads: list[dict[str, Any]],
+) -> None:
+    _write_named_pymol_outputs(
+        dirs=dirs,
+        cfg=cfg,
+        selection_payloads=selection_payloads,
+        command_filename="pca_reference_atom_selections.pml",
+        report_filename="pca_reference_atom_selection_report.json",
+        object_prefix="pca_ref_atoms_",
+    )
+
+
+def _write_named_pymol_outputs(
+    dirs: dict[str, Path],
+    cfg: Any,
+    selection_payloads: list[dict[str, Any]],
+    command_filename: str,
+    report_filename: str,
+    object_prefix: str,
+) -> None:
+    command_path = dirs["data"] / command_filename
+    report_path = dirs["data"] / report_filename
+
+    lines = [
+        "# PyMOL selections for atoms used in PCA",
+        "# Load the corresponding topology/structure in PyMOL, then run:",
+        f"# @ {command_path.name}",
+        "",
+    ]
+    report_rows = []
+    for payload in selection_payloads:
+        item_name = str(payload.get("trajectory", payload.get("reference_name", "selection")))
+        object_name = f"{object_prefix}{_sanitize_pymol_object_name(item_name)}"
+        row = dict(payload)
+        row["pymol_object_name"] = object_name
+        if row.get("status") != "skipped" and "pymol_selection" in row:
+            lines.append(f"select {object_name}, {row['pymol_selection']}")
+        report_rows.append(row)
+
+    command_path.write_text("\n".join(lines) + "\n")
+    report_path.write_text(
+        json.dumps(
+            {
+                "feature_mode": cfg.pca.feature_mode,
+                "site_from_reference_ligand": bool(cfg.pca.site_from_reference_ligand),
+                "command_file": command_path.name,
+                "selections": report_rows,
+            },
+            indent=2,
+        )
+    )
+
+
 def _pairwise_distance_vector(positions: Any) -> Any:
     _, np, _, _ = _imports()
     pos = np.asarray(positions, dtype=float)
@@ -417,6 +524,7 @@ def run_pca(ctx: RunContext) -> None:
     fit_name = cfg.pca.fit_trajectory or names[0]
     fit_u = universe_map[fit_name]
     fit_u.trajectory[0]
+    selection_payloads: list[dict[str, Any]] = []
 
     if cfg.pca.align:
         align_sel = cfg.pca.site_align_selection if cfg.pca.site_from_reference_ligand else cfg.system.align_selection
@@ -480,6 +588,23 @@ def run_pca(ctx: RunContext) -> None:
 
         for name, u in universes:
             atom_indices = [atom_idx_by_traj[name][k] for k in key_order]
+            selected_atoms = u.atoms[atom_indices]
+            selection_payloads.append(
+                {
+                    "trajectory": name,
+                    "selection_mode": "site_from_reference_ligand",
+                    "atom_count": len(selected_atoms),
+                    "source_selection": {
+                        "site_reference_pdb": str(site_ref_path),
+                        "site_ligand_selection": cfg.pca.site_ligand_selection,
+                        "site_cutoff": cfg.pca.site_cutoff,
+                        "site_atom_selection": cfg.pca.site_atom_selection,
+                        "site_align_selection": cfg.pca.site_align_selection,
+                        "site_map_mode": cfg.pca.site_map_mode,
+                    },
+                    "pymol_selection": _pymol_selection_from_atoms(selected_atoms),
+                }
+            )
             if feature_mode == "distance":
                 mat, frames = _collect_distance_matrix_from_atom_indices(u, atom_indices, _frame_slice(cfg))
             else:
@@ -497,12 +622,23 @@ def run_pca(ctx: RunContext) -> None:
                     "site_map_mode": cfg.pca.site_map_mode,
                     "site_atom_selection": cfg.pca.site_atom_selection,
                     "common_mapped_atoms": len(common_keys),
+                    "pymol_command_file": "pca_atom_selections.pml",
                 },
                 indent=2,
             )
         )
     else:
         for name, u in universes:
+            selected_atoms = u.select_atoms(cfg.pca.selection)
+            selection_payloads.append(
+                {
+                    "trajectory": name,
+                    "selection_mode": "direct_selection",
+                    "atom_count": len(selected_atoms),
+                    "source_selection": cfg.pca.selection,
+                    "pymol_selection": _pymol_selection_from_atoms(selected_atoms),
+                }
+            )
             if feature_mode == "distance":
                 mat, frames = _collect_distance_matrix(u, cfg.pca.selection, _frame_slice(cfg))
             else:
@@ -529,6 +665,7 @@ def run_pca(ctx: RunContext) -> None:
             scores_rows.append(row)
 
     reference_projection_rows = []
+    reference_selection_payloads: list[dict[str, Any]] = []
     for idx, pdb_path in enumerate(cfg.pca.reference_pdbs):
         mda, _, _, _ = _imports()
         ref_u = mda.Universe(str(pdb_path))
@@ -588,6 +725,14 @@ def run_pca(ctx: RunContext) -> None:
                 raise RuntimeError("Internal error: missing site residue set for PCA site mode")
             if site_ref_u is None:
                 raise RuntimeError("Internal error: missing site reference universe for PCA site mode")
+            source_selection: Any = {
+                "site_reference_pdb": str(site_ref_path),
+                "site_ligand_selection": cfg.pca.site_ligand_selection,
+                "site_cutoff": cfg.pca.site_cutoff,
+                "site_atom_selection": cfg.pca.site_atom_selection,
+                "site_align_selection": cfg.pca.site_align_selection,
+                "site_map_mode": cfg.pca.site_map_mode,
+            }
             ref_atom_map, strategy, mapped_residue_count, residue_pairs = _build_site_atom_map(
                 mobile_universe=ref_u,
                 reference_universe=site_ref_u,
@@ -605,20 +750,24 @@ def run_pca(ctx: RunContext) -> None:
                     f"could not map {len(missing)} site atoms from the site reference "
                     f"using mode '{cfg.pca.site_map_mode}'."
                 )
-                reference_projection_rows.append(
-                    {
-                        "reference_name": ref_name,
-                        "reference_pdb": str(pdb_path),
-                        "mapping_strategy": strategy,
-                        "mapped_site_residues": mapped_residue_count,
-                        "mapped_site_atoms": len(ref_atom_map),
-                        "missing_site_atoms": len(missing),
-                        "used_site_residues": residue_pairs,
-                        "status": "skipped",
-                    }
-                )
+                skipped_row = {
+                    "reference_name": ref_name,
+                    "reference_pdb": str(pdb_path),
+                    "selection_mode": "site_from_reference_ligand",
+                    "atom_count": len(ref_atom_map),
+                    "mapping_strategy": strategy,
+                    "mapped_site_residues": mapped_residue_count,
+                    "mapped_site_atoms": len(ref_atom_map),
+                    "missing_site_atoms": len(missing),
+                    "used_site_residues": residue_pairs,
+                    "source_selection": source_selection,
+                    "status": "skipped",
+                }
+                reference_projection_rows.append(skipped_row)
+                reference_selection_payloads.append(skipped_row)
                 continue
-            coords = [ref_u.atoms[ref_atom_map[k]].position.copy() for k in site_key_order]
+            selected_ref_atoms = ref_u.atoms[[ref_atom_map[k] for k in site_key_order]]
+            coords = [atom.position.copy() for atom in selected_ref_atoms]
             ref_coords = np.array(coords)
             if feature_mode == "distance":
                 ref_vec = _pairwise_distance_vector(ref_coords).reshape(1, -1)
@@ -626,46 +775,51 @@ def run_pca(ctx: RunContext) -> None:
                 ref_vec = ref_coords.reshape(1, -1)
         else:
             ref_sel = cfg.pca.selection
-            ref_atoms = ref_u.select_atoms(ref_sel)
+            source_selection = ref_sel
+            selected_ref_atoms = ref_u.select_atoms(ref_sel)
             if feature_mode == "distance":
-                if len(ref_atoms) < 2:
+                if len(selected_ref_atoms) < 2:
                     raise RuntimeError(
                         f"PCA reference selection for distance mode must contain at least 2 atoms: '{ref_sel}'"
                     )
-                expected_features = (len(ref_atoms) * (len(ref_atoms) - 1)) // 2
+                expected_features = (len(selected_ref_atoms) * (len(selected_ref_atoms) - 1)) // 2
                 if expected_features != pca.n_features_in_:
                     raise RuntimeError(
                         f"PCA reference feature mismatch for {pdb_path}: "
-                        f"selection '{ref_sel}' gives {len(ref_atoms)} atoms -> {expected_features} pair distances, "
+                        f"selection '{ref_sel}' gives {len(selected_ref_atoms)} atoms -> {expected_features} pair distances, "
                         f"expected {pca.n_features_in_}. Use a selection matching the PCA fit atoms exactly."
                     )
-                ref_vec = _pairwise_distance_vector(ref_atoms.positions).reshape(1, -1)
+                ref_vec = _pairwise_distance_vector(selected_ref_atoms.positions).reshape(1, -1)
             else:
                 expected_atoms = pca.n_features_in_ // 3
-                if len(ref_atoms) != expected_atoms:
+                if len(selected_ref_atoms) != expected_atoms:
                     raise RuntimeError(
                         f"PCA reference atom count mismatch for {pdb_path}: "
-                        f"selection '{ref_sel}' gives {len(ref_atoms)} atoms, expected {expected_atoms}. "
+                        f"selection '{ref_sel}' gives {len(selected_ref_atoms)} atoms, expected {expected_atoms}. "
                         "Use a selection that matches the PCA fit atoms exactly."
                     )
-                ref_vec = ref_atoms.positions.reshape(1, -1)
+                ref_vec = selected_ref_atoms.positions.reshape(1, -1)
         ref_sc = pca.transform(ref_vec)
         row = {"trajectory": ref_name, "frame": -1}
         for pc_i in range(ref_sc.shape[1]):
             row[f"PC{pc_i + 1}"] = float(ref_sc[0, pc_i])
         scores_rows.append(row)
-        reference_projection_rows.append(
-            {
-                "reference_name": ref_name,
-                "reference_pdb": str(pdb_path),
-                "mapping_strategy": strategy if cfg.pca.site_from_reference_ligand else "direct_selection",
-                "mapped_site_residues": mapped_residue_count if cfg.pca.site_from_reference_ligand else None,
-                "mapped_site_atoms": len(site_key_order) if cfg.pca.site_from_reference_ligand and site_key_order is not None else None,
-                "missing_site_atoms": 0 if cfg.pca.site_from_reference_ligand else None,
-                "used_site_residues": residue_pairs if cfg.pca.site_from_reference_ligand else None,
-                "status": "projected",
-            }
-        )
+        projected_row = {
+            "reference_name": ref_name,
+            "reference_pdb": str(pdb_path),
+            "selection_mode": "site_from_reference_ligand" if cfg.pca.site_from_reference_ligand else "direct_selection",
+            "atom_count": len(selected_ref_atoms),
+            "mapping_strategy": strategy if cfg.pca.site_from_reference_ligand else "direct_selection",
+            "mapped_site_residues": mapped_residue_count if cfg.pca.site_from_reference_ligand else None,
+            "mapped_site_atoms": len(site_key_order) if cfg.pca.site_from_reference_ligand and site_key_order is not None else None,
+            "missing_site_atoms": 0 if cfg.pca.site_from_reference_ligand else None,
+            "used_site_residues": residue_pairs if cfg.pca.site_from_reference_ligand else None,
+            "source_selection": source_selection,
+            "pymol_selection": _pymol_selection_from_atoms(selected_ref_atoms),
+            "status": "projected",
+        }
+        reference_projection_rows.append(projected_row)
+        reference_selection_payloads.append(projected_row)
 
     scores = pd.DataFrame(scores_rows)
     scores.to_csv(dirs["tables"] / "pca_scores.csv", index=False)
@@ -682,6 +836,8 @@ def run_pca(ctx: RunContext) -> None:
             indent=2,
         )
     )
+    _write_pca_pymol_outputs(dirs, cfg, selection_payloads)
+    _write_pca_reference_pymol_outputs(dirs, cfg, reference_selection_payloads)
     (dirs["data"] / "pca_reference_projection_report.json").write_text(json.dumps(reference_projection_rows, indent=2))
     if "PC1" not in scores.columns or "PC2" not in scores.columns:
         n_comp = int(getattr(pca, "n_components_", pca.n_components))
