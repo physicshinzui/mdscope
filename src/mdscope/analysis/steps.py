@@ -18,6 +18,7 @@ from ._common import (
 from .cluster import run_cluster
 from .convergence import _jsd_1d, _jsd_2d, _jsd_from_prob, run_convergence
 from .distance import run_distance
+from .contacts import run_contacts
 from .dssp import _dssp_precheck_diagnostics, _raise_dssp_precheck_error, run_dssp
 from .pca import _collect_matrix, _collect_matrix_from_atom_indices, _plot_pca_free_energy_rt, run_pca
 from .pocket import (
@@ -57,4 +58,5 @@ STEP_HANDLERS = {
     "convergence": run_convergence,
     "pocket": run_pocket,
     "water": run_water,
+    "contacts": run_contacts,
 }

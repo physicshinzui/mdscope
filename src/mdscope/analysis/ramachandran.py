@@ -75,14 +75,18 @@ def run_ramachandran(ctx: RunContext) -> None:
     if len(df) == 0:
         return
 
-    fig, ax = plt.subplots(figsize=(6, 6))
-    ax.scatter(df["phi"], df["psi"], s=3, alpha=0.25)
-    ax.set_xlim(-180, 180)
-    ax.set_ylim(-180, 180)
-    ax.set_xlabel("phi")
-    ax.set_ylabel("psi")
-    _save_plot(cfg, fig, dirs["figures"] / "ramachandran_global")
-    plt.close(fig)
+    if cfg.ramachandran.mode in {"global", "both"}:
+        fig, ax = plt.subplots(figsize=(6, 6))
+        ax.scatter(df["phi"], df["psi"], s=3, alpha=0.25)
+        ax.set_xlim(-180, 180)
+        ax.set_ylim(-180, 180)
+        ax.set_xlabel("phi")
+        ax.set_ylabel("psi")
+        _save_plot(cfg, fig, dirs["figures"] / "ramachandran_global")
+        plt.close(fig)
+
+    if cfg.ramachandran.mode == "global":
+        return
 
     per_residue_tables_dir = dirs["tables"] / "ramachandran_per_residue"
     per_residue_figures_dir = dirs["figures"] / "ramachandran_per_residue"

@@ -30,6 +30,7 @@ STEPS: list[Step] = [
     Step("convergence", ("rmsd", "rg", "pca", "cluster"), lambda c: c.analyses.convergence),
     Step("pocket", ("representative",), lambda c: c.analyses.pocket),
     Step("water", tuple(), lambda c: c.analyses.water),
+    Step("contacts", tuple(), lambda c: c.analyses.contacts),
 ]
 
 STEP_INDEX = {step.name: step for step in STEPS}

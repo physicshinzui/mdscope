@@ -20,6 +20,7 @@ Config-first MD trajectory analysis automation tool built on MDAnalysis.
   - `convergence`
   - `pocket` (fpocket backend)
   - `water`
+  - `contacts` (residue-contact occupancy and two-group comparison)
 - Publication-oriented plotting defaults (multi-format + DPI control)
 
 ## Dependencies
@@ -225,6 +226,37 @@ system:
 - `hdbscan_labels.csv` includes both numeric `label` and display `cluster_name`
 - `cluster_name` is trajectory-oriented (dominant trajectory in cluster)
 - Representative structures are exported as PDB per cluster
+
+### Residue Contacts / Two-group Comparison
+
+`contacts` computes per-trajectory residue-contact occupancies and compares two
+groups using trajectories (not frames) as the independent statistical units.
+Heavy-atom contacts, sequence-neighbor exclusion, ranking thresholds, and the
+two trajectory groups are configurable.
+
+```yaml
+analyses:
+  contacts: true
+
+contacts:
+  selection: "protein and not resname ACE"
+  atom_selection: "not name H*"
+  cutoff_angstrom: 4.5
+  min_sequence_separation: 3
+  use_pbc: true
+  minimum_mean_occupancy: 0.05
+  minimum_abs_difference: 0.05
+  top_n: 30
+  comparison:
+    group_a: WT
+    trajectories_a: [WT_r01, WT_r02, WT_r03]
+    group_b: R139C
+    trajectories_b: [R139C_r01, R139C_r02, R139C_r03]
+```
+
+Outputs include per-trajectory occupancies, a complete comparison table,
+ranked contact differences, residue hotspot scores, mean contact maps, and a
+signed difference map. Positive differences mean `group_b - group_a`.
 
 ## Output Structure
 

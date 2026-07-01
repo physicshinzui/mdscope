@@ -7,6 +7,7 @@ from .analysis.cluster import plot_cluster_from_tables
 from .analysis.pca import plot_pca_from_scores
 from .analysis.pocket import plot_pocket_from_tables
 from .analysis.water import plot_water_from_tables
+from .analysis.contacts import plot_contacts_from_tables
 from .config import AppConfig
 from .plotting import apply_publication_style
 
@@ -19,6 +20,7 @@ REPLOTTERS = (
     "cluster",
     "water",
     "pocket",
+    "contacts",
 )
 
 
@@ -103,6 +105,10 @@ def _replot_pocket(config: AppConfig, outdir: Path) -> list[str]:
     return plot_pocket_from_tables(config, pockets_df, outdir)
 
 
+def _replot_contacts(config: AppConfig, outdir: Path) -> list[str]:
+    return plot_contacts_from_tables(config, outdir)
+
+
 REPLOTTER_FUNCS = {
     "rmsd": _replot_rmsd,
     "rg": _replot_rg,
@@ -112,6 +118,7 @@ REPLOTTER_FUNCS = {
     "cluster": _replot_cluster,
     "water": _replot_water,
     "pocket": _replot_pocket,
+    "contacts": _replot_contacts,
 }
 
 

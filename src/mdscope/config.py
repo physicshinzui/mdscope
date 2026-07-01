@@ -20,6 +20,7 @@ StepName = Literal[
     "convergence",
     "pocket",
     "water",
+    "contacts",
 ]
 
 
@@ -304,6 +305,63 @@ class DistanceConfig(BaseModel):
     pairs: list[DistanceItem] = []
 
 
+class ContactComparisonConfig(BaseModel):
+    group_a: str
+    trajectories_a: list[str] = Field(min_length=1)
+    group_b: str
+    trajectories_b: list[str] = Field(min_length=1)
+
+    @model_validator(mode="after")
+    def validate_groups(self) -> "ContactComparisonConfig":
+        if self.group_a == self.group_b:
+            raise ValueError("contacts.comparison group names must be different")
+        overlap = set(self.trajectories_a) & set(self.trajectories_b)
+        if overlap:
+            joined = ", ".join(sorted(overlap))
+            raise ValueError(f"contacts.comparison trajectory groups overlap: {joined}")
+        return self
+
+
+class ContactsConfig(BaseModel):
+    selection: str = "protein and not resname ACE"
+    atom_selection: str = "not name H*"
+    cutoff_angstrom: float = 4.5
+    min_sequence_separation: int = 3
+    use_pbc: bool = True
+    minimum_mean_occupancy: float = 0.05
+    minimum_abs_difference: float = 0.0
+    top_n: int = 30
+    comparison: ContactComparisonConfig | None = None
+
+    @field_validator("cutoff_angstrom")
+    @classmethod
+    def validate_contact_cutoff(cls, value: float) -> float:
+        if value <= 0:
+            raise ValueError("contacts.cutoff_angstrom must be > 0")
+        return value
+
+    @field_validator("min_sequence_separation")
+    @classmethod
+    def validate_sequence_separation(cls, value: int) -> int:
+        if value < 0:
+            raise ValueError("contacts.min_sequence_separation must be >= 0")
+        return value
+
+    @field_validator("minimum_mean_occupancy", "minimum_abs_difference")
+    @classmethod
+    def validate_fraction(cls, value: float) -> float:
+        if not 0.0 <= value <= 1.0:
+            raise ValueError("contact occupancy/difference thresholds must be in [0, 1]")
+        return value
+
+    @field_validator("top_n")
+    @classmethod
+    def validate_top_n(cls, value: int) -> int:
+        if value < 1:
+            raise ValueError("contacts.top_n must be >= 1")
+        return value
+
+
 class RamachandranConfig(BaseModel):
     mode: Literal["global", "per_residue", "both"] = "both"
     selection: str = "protein"
@@ -367,6 +425,7 @@ class AnalysesConfig(BaseModel):
     convergence: bool = False
     pocket: bool = False
     water: bool = False
+    contacts: bool = False
 
 
 class AppConfig(BaseModel):
@@ -384,6 +443,7 @@ class AppConfig(BaseModel):
     sasa: SasaConfig = SasaConfig()
     plot: PlotConfig = PlotConfig()
     distance: DistanceConfig = DistanceConfig()
+    contacts: ContactsConfig = ContactsConfig()
     ramachandran: RamachandranConfig = RamachandranConfig()
     convergence: ConvergenceConfig = ConvergenceConfig()
     pocket: PocketConfig = PocketConfig()
@@ -402,6 +462,16 @@ class AppConfig(BaseModel):
             raise ValueError("rmsd.map_file is required when rmsd.map_mode=user_map")
         if self.rmsd.region_mode == "ligand_site" and not self.rmsd.ligand_selection:
             raise ValueError("rmsd.ligand_selection is required when rmsd.region_mode=ligand_site")
+        if self.analyses.contacts:
+            comparison = self.contacts.comparison
+            if comparison is None:
+                raise ValueError("contacts.comparison is required when analyses.contacts=true")
+            known = set(names)
+            requested = set(comparison.trajectories_a) | set(comparison.trajectories_b)
+            unknown = sorted(requested - known)
+            if unknown:
+                joined = ", ".join(unknown)
+                raise ValueError(f"contacts.comparison contains unknown trajectories: {joined}")
         return self
 
 

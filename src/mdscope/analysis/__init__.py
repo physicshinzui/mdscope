@@ -14,6 +14,7 @@ from .convergence import run_convergence
 from .dssp import run_dssp
 from .sasa import run_sasa
 from .pocket import run_pocket
+from .contacts import run_contacts
 
 STEP_HANDLERS = {
     "rmsd": run_rmsd, "rmsf": run_rmsf, "dssp": run_dssp,
@@ -21,5 +22,6 @@ STEP_HANDLERS = {
     "rg": run_rg, "sasa": run_sasa, "distance": run_distance,
     "ramachandran": run_ramachandran, "convergence": run_convergence,
     "pocket": run_pocket, "water": run_water,
+    "contacts": run_contacts,
 }
 __all__ = ["STEP_HANDLERS", "RunContext"]
