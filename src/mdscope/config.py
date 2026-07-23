@@ -83,6 +83,8 @@ class RmsdConfig(BaseModel):
     selection: str = "name CA"
     align: bool = True
     align_selection: str = "protein and name CA"
+    reference_align_selection: str | None = None
+    align_selection_by_trajectory: dict[str, str] = {}
     debug_write_aligned_pdb: bool = True
     debug_max_frames: int = 1
     region_mode: Literal["global", "ligand_site"] = "global"
@@ -94,6 +96,30 @@ class RmsdConfig(BaseModel):
     threshold_angstrom: float = 1.5
     export_selection: str = "all"
     max_export_frames: int = 100
+
+    @field_validator("reference_align_selection")
+    @classmethod
+    def validate_reference_align_selection(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        value = value.strip()
+        if not value:
+            raise ValueError("rmsd.reference_align_selection must not be empty")
+        return value
+
+    @field_validator("align_selection_by_trajectory")
+    @classmethod
+    def validate_align_selection_by_trajectory(cls, value: dict[str, str]) -> dict[str, str]:
+        cleaned: dict[str, str] = {}
+        for trajectory, selection in value.items():
+            trajectory = str(trajectory).strip()
+            selection = str(selection).strip()
+            if not trajectory:
+                raise ValueError("rmsd.align_selection_by_trajectory keys must not be empty")
+            if not selection:
+                raise ValueError("rmsd.align_selection_by_trajectory values must not be empty")
+            cleaned[trajectory] = selection
+        return cleaned
 
 
 class RmsfConfig(BaseModel):
@@ -324,6 +350,7 @@ class ContactComparisonConfig(BaseModel):
 
 class ContactsConfig(BaseModel):
     selection: str = "protein and not resname ACE"
+    selection_by_trajectory: dict[str, str] = {}
     atom_selection: str = "not name H*"
     cutoff_angstrom: float = 4.5
     min_sequence_separation: int = 3
@@ -331,7 +358,52 @@ class ContactsConfig(BaseModel):
     minimum_mean_occupancy: float = 0.05
     minimum_abs_difference: float = 0.0
     top_n: int = 30
+    residue_number_offsets: dict[int, int] = {}
+    residue_number_offsets_by_trajectory: dict[str, dict[int, int]] = {}
+    residue_numbering_name: str = "topology"
     comparison: ContactComparisonConfig | None = None
+
+    @field_validator("selection_by_trajectory")
+    @classmethod
+    def validate_selection_by_trajectory(cls, value: dict[str, str]) -> dict[str, str]:
+        cleaned: dict[str, str] = {}
+        for trajectory, selection in value.items():
+            trajectory = str(trajectory).strip()
+            selection = str(selection).strip()
+            if not trajectory:
+                raise ValueError("contacts.selection_by_trajectory keys must not be empty")
+            if not selection:
+                raise ValueError("contacts.selection_by_trajectory values must not be empty")
+            cleaned[trajectory] = selection
+        return cleaned
+
+    @field_validator("residue_number_offsets")
+    @classmethod
+    def validate_residue_number_offsets(cls, value: dict[int, int]) -> dict[int, int]:
+        if any(int(chain) < 1 for chain in value):
+            raise ValueError("contacts.residue_number_offsets chain keys must be >= 1")
+        return {int(chain): int(offset) for chain, offset in value.items()}
+
+    @field_validator("residue_number_offsets_by_trajectory")
+    @classmethod
+    def validate_residue_number_offsets_by_trajectory(cls, value: dict[str, dict[int, int]]) -> dict[str, dict[int, int]]:
+        cleaned: dict[str, dict[int, int]] = {}
+        for trajectory, offsets in value.items():
+            trajectory = str(trajectory).strip()
+            if not trajectory:
+                raise ValueError("contacts.residue_number_offsets_by_trajectory keys must not be empty")
+            if any(int(chain) < 1 for chain in offsets):
+                raise ValueError("contacts.residue_number_offsets_by_trajectory chain keys must be >= 1")
+            cleaned[trajectory] = {int(chain): int(offset) for chain, offset in offsets.items()}
+        return cleaned
+
+    @field_validator("residue_numbering_name")
+    @classmethod
+    def validate_residue_numbering_name(cls, value: str) -> str:
+        value = value.strip()
+        if not value:
+            raise ValueError("contacts.residue_numbering_name must not be empty")
+        return value
 
     @field_validator("cutoff_angstrom")
     @classmethod
@@ -462,6 +534,11 @@ class AppConfig(BaseModel):
             raise ValueError("rmsd.map_file is required when rmsd.map_mode=user_map")
         if self.rmsd.region_mode == "ligand_site" and not self.rmsd.ligand_selection:
             raise ValueError("rmsd.ligand_selection is required when rmsd.region_mode=ligand_site")
+        if self.analyses.rmsd:
+            rmsd_selection_unknown = sorted(set(self.rmsd.align_selection_by_trajectory) - set(names))
+            if rmsd_selection_unknown:
+                joined = ", ".join(rmsd_selection_unknown)
+                raise ValueError(f"rmsd.align_selection_by_trajectory contains unknown trajectories: {joined}")
         if self.analyses.contacts:
             comparison = self.contacts.comparison
             if comparison is None:
@@ -472,6 +549,14 @@ class AppConfig(BaseModel):
             if unknown:
                 joined = ", ".join(unknown)
                 raise ValueError(f"contacts.comparison contains unknown trajectories: {joined}")
+            selection_unknown = sorted(set(self.contacts.selection_by_trajectory) - known)
+            if selection_unknown:
+                joined = ", ".join(selection_unknown)
+                raise ValueError(f"contacts.selection_by_trajectory contains unknown trajectories: {joined}")
+            offset_unknown = sorted(set(self.contacts.residue_number_offsets_by_trajectory) - known)
+            if offset_unknown:
+                joined = ", ".join(offset_unknown)
+                raise ValueError(f"contacts.residue_number_offsets_by_trajectory contains unknown trajectories: {joined}")
         return self
 
 
@@ -794,6 +879,10 @@ rmsd:
   align: true
   # Selection used for residue mapping / alignment logic (not necessarily the same as `selection`).
   align_selection: protein and name CA
+  # Optional independent selection for the reference, useful when reference/mobile numbering differs.
+  reference_align_selection: null
+  # Optional per-trajectory mobile selections, keyed by system.trajectory_names.
+  align_selection_by_trajectory: {}
   # Debug mode: write paired reference/mobile-aligned PDBs for visual inspection.
   debug_write_aligned_pdb: true
   # Max number of frames per trajectory for debug aligned PDB export.

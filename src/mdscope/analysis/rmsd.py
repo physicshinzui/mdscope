@@ -77,8 +77,9 @@ def run_rmsd(ctx: RunContext) -> None:
     universes = _load_universes(cfg)
     reference = mda.Universe(str(cfg.rmsd.reference)) if cfg.rmsd.reference else universes[0][1]
     alignment_selection = cfg.rmsd.align_selection
+    reference_alignment_selection = cfg.rmsd.reference_align_selection or alignment_selection
     rmsd_selection = cfg.rmsd.selection
-    ref_residues = list(reference.select_atoms(alignment_selection).residues)
+    ref_residues = list(reference.select_atoms(reference_alignment_selection).residues)
     ref_res = residue_records(ref_residues)
 
     ligand_site_ref_resindices: set[int] = set()
@@ -101,12 +102,14 @@ def run_rmsd(ctx: RunContext) -> None:
 
     for traj_name, u in universes:
         export_count_by_traj.setdefault(traj_name, 0)
+        mobile_alignment_selection = cfg.rmsd.align_selection_by_trajectory.get(traj_name, alignment_selection)
         mobile_residues, ref_residues, mapping, selected_mapping_strategy = build_residue_mapping(
             mobile_universe=u,
             reference_universe=reference,
-            align_selection=alignment_selection,
+            align_selection=mobile_alignment_selection,
             map_mode=cfg.rmsd.map_mode,
             map_file=cfg.rmsd.map_file,
+            reference_align_selection=reference_alignment_selection,
         )
         mobile_res = residue_records(mobile_residues)
         mapping_mode_rows.append(
@@ -114,6 +117,8 @@ def run_rmsd(ctx: RunContext) -> None:
                 "trajectory": traj_name,
                 "selected_mapping_strategy": selected_mapping_strategy,
                 "mapped_residues": len(mapping),
+                "mobile_align_selection": mobile_alignment_selection,
+                "reference_align_selection": reference_alignment_selection,
             }
         )
 
@@ -268,6 +273,8 @@ def run_rmsd(ctx: RunContext) -> None:
         "mapped_pairs": int(len(mapping_rows)),
         "map_mode": cfg.rmsd.map_mode,
         "align_selection": alignment_selection,
+        "reference_align_selection": reference_alignment_selection,
+        "align_selection_by_trajectory": cfg.rmsd.align_selection_by_trajectory,
         "selection": rmsd_selection,
         "align": cfg.rmsd.align,
         "region_mode": cfg.rmsd.region_mode,

@@ -52,13 +52,23 @@ def _welch_p_and_hedges_g(values_a: Any, values_b: Any) -> tuple[float, float]:
     return p_value, effect
 
 
-def _residue_metadata(universe: Any, residue_selection: str) -> tuple[list[dict[str, Any]], Any, Any]:
+def _residue_metadata(
+    universe: Any,
+    residue_selection: str,
+    residue_number_offsets: dict[int, int] | None = None,
+) -> tuple[list[dict[str, Any]], Any, Any]:
     _, np, _, _ = _imports()
+    residue_number_offsets = residue_number_offsets or {}
     residues = universe.select_atoms(residue_selection).residues
     if len(residues) < 2:
         raise RuntimeError(f"Contact residue selection contains fewer than two residues: {residue_selection}")
 
-    fragment_ids = [int(res.atoms[0].fragindex) for res in residues]
+    try:
+        fragment_ids = [int(res.atoms[0].fragindex) for res in residues]
+    except Exception as exc:
+        if exc.__class__.__name__ != "NoDataError":
+            raise
+        fragment_ids = [int(res.atoms[0].segindex) for res in residues]
     fragment_order: dict[int, int] = {}
     chain_positions: dict[int, int] = defaultdict(int)
     metadata: list[dict[str, Any]] = []
@@ -73,6 +83,7 @@ def _residue_metadata(universe: Any, residue_selection: str) -> tuple[list[dict[
                 "chain": chain,
                 "chain_position": chain_positions[chain],
                 "resid": int(residue.resid),
+                "display_resid": int(residue.resid) + int(residue_number_offsets.get(chain, 0)),
                 "resname": str(residue.resname),
                 "resindex": int(residue.resindex),
             }
@@ -80,11 +91,17 @@ def _residue_metadata(universe: Any, residue_selection: str) -> tuple[list[dict[
     return metadata, residues, np.asarray(fragment_ids, dtype=int)
 
 
-def _collect_trajectory_contacts(universe: Any, config: Any) -> tuple[dict[int, int], int, list[dict[str, Any]]]:
+def _collect_trajectory_contacts(
+    universe: Any,
+    config: Any,
+    residue_selection: str | None = None,
+    residue_number_offsets: dict[int, int] | None = None,
+) -> tuple[dict[int, int], int, list[dict[str, Any]]]:
     _, np, _, _ = _imports()
     from MDAnalysis.lib.distances import self_capped_distance
 
-    metadata, residues, _ = _residue_metadata(universe, config.contacts.selection)
+    residue_selection = residue_selection or config.contacts.selection
+    metadata, residues, _ = _residue_metadata(universe, residue_selection, residue_number_offsets)
     residue_atoms = residues.atoms
     atoms = residue_atoms.select_atoms(config.contacts.atom_selection)
     if len(atoms) == 0:
@@ -139,6 +156,67 @@ def _residue_label(item: dict[str, Any]) -> str:
     return f"C{item['chain']}:{item['resid']} {item['resname']}"
 
 
+def _display_residue_label(config: Any, chain: int, resid: int, resname: str, include_chain: bool = True) -> str:
+    from Bio.SeqUtils import seq1
+
+    display_resid = int(resid) + int(config.contacts.residue_number_offsets.get(int(chain), 0))
+    residue_letter = seq1(str(resname), custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    prefix = f"C{int(chain)}:" if include_chain else ""
+    return f"{prefix}{residue_letter}{display_resid}"
+
+
+def _display_resid(config: Any, chain: int, resid: int) -> int:
+    return int(resid) + int(config.contacts.residue_number_offsets.get(int(chain), 0))
+
+
+def _metadata_display_residue_label(item: dict[str, Any], include_chain: bool = True) -> str:
+    from Bio.SeqUtils import seq1
+
+    residue_letter = seq1(str(item["resname"]), custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    prefix = f"C{int(item['chain'])}:" if include_chain else ""
+    return f"{prefix}{residue_letter}{int(item.get('display_resid', item['resid']))}"
+
+
+def _metadata_comparison_residue_label(
+    item_a: dict[str, Any],
+    item_b: dict[str, Any],
+) -> str:
+    from Bio.SeqUtils import seq1
+
+    label_a = _metadata_display_residue_label(item_a)
+    letter_a = seq1(str(item_a["resname"]), custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    letter_b = seq1(str(item_b["resname"]), custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    return f"{label_a}→{letter_b}" if letter_a != letter_b else label_a
+
+
+def _comparison_residue_label(
+    config: Any,
+    chain: int,
+    resid: int,
+    resname_a: str,
+    resname_b: str,
+) -> str:
+    from Bio.SeqUtils import seq1
+
+    label_a = _display_residue_label(config, chain, resid, resname_a)
+    letter_a = seq1(str(resname_a), custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    letter_b = seq1(str(resname_b), custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    return f"{label_a}→{letter_b}" if letter_a != letter_b else label_a
+
+
+def _row_comparison_residue_label(row: Any, side: str) -> str:
+    from Bio.SeqUtils import seq1
+
+    chain = int(getattr(row, f"residue_{side}_chain"))
+    display_resid = int(getattr(row, f"residue_{side}_display_resid"))
+    resname_a = str(getattr(row, f"residue_{side}_resname_a"))
+    resname_b = str(getattr(row, f"residue_{side}_resname_b"))
+    letter_a = seq1(resname_a, custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    letter_b = seq1(resname_b, custom_map={"HSD": "H", "HSE": "H", "HSP": "H", "MSE": "M"})
+    label = f"C{chain}:{letter_a}{display_resid}"
+    return f"{label}→{letter_b}" if letter_a != letter_b else label
+
+
 def _plot_contact_matrix(config: Any, matrix: Any, metadata: list[dict[str, Any]], title: str, out_prefix: Path, difference: bool) -> None:
     _, np, _, plt = _imports()
     fig, ax = plt.subplots(figsize=(7.2, 6.2))
@@ -153,7 +231,7 @@ def _plot_contact_matrix(config: Any, matrix: Any, metadata: list[dict[str, Any]
     fig.colorbar(image, ax=ax, label=cbar_label, fraction=0.046, pad=0.04)
 
     tick_indices = sorted(set([0, len(metadata) - 1] + list(range(24, len(metadata), 25))))
-    tick_labels = [f"C{metadata[i]['chain']}:{metadata[i]['resid']}" for i in tick_indices]
+    tick_labels = [_metadata_display_residue_label(metadata[i]) for i in tick_indices]
     ax.set_xticks(tick_indices, tick_labels, rotation=90, fontsize=7)
     ax.set_yticks(tick_indices, tick_labels, fontsize=7)
     boundaries = [i - 0.5 for i in range(1, len(metadata)) if metadata[i]["chain"] != metadata[i - 1]["chain"]]
@@ -188,9 +266,13 @@ def plot_contacts_from_tables(config: Any, outdir: Path) -> list[str]:
                 "index": index,
                 "chain": int(row[f"residue_{side}_chain"]),
                 "resid": int(row[f"residue_{side}_resid"]),
+                "display_resid": int(row[f"residue_{side}_display_resid"]),
                 "resname": str(row[f"residue_{side}_resname_a"]),
             }
-    metadata = [metadata_map.get(i, {"index": i, "chain": 0, "resid": i + 1, "resname": "UNK"}) for i in range(n_residues)]
+    metadata = [
+        metadata_map.get(i, {"index": i, "chain": 0, "resid": i + 1, "display_resid": i + 1, "resname": "UNK"})
+        for i in range(n_residues)
+    ]
 
     matrices = {
         comparison.group_a: np.zeros((n_residues, n_residues), dtype=float),
@@ -229,7 +311,14 @@ def plot_contacts_from_tables(config: Any, outdir: Path) -> list[str]:
     if len(top) > 0:
         fig, ax = plt.subplots(figsize=(8.0, max(4.5, 0.28 * len(top))))
         colors = ["#b2182b" if value > 0 else "#2166ac" for value in top["difference_b_minus_a"]]
-        ax.barh(top["contact_label_a"], top["difference_b_minus_a"], color=colors)
+        contact_labels = [
+            (
+                f"{_row_comparison_residue_label(row, 'i')}"
+                f" -- {_row_comparison_residue_label(row, 'j')}"
+            )
+            for row in top.itertuples(index=False)
+        ]
+        ax.barh(contact_labels, top["difference_b_minus_a"], color=colors)
         ax.axvline(0.0, color="black", lw=0.8)
         ax.set_xlabel(f"occupancy difference ({comparison.group_b} - {comparison.group_a})")
         ax.set_ylabel("residue contact")
@@ -241,7 +330,14 @@ def plot_contacts_from_tables(config: Any, outdir: Path) -> list[str]:
     top_hotspots = hotspots.head(config.contacts.top_n).iloc[::-1]
     if len(top_hotspots) > 0:
         fig, ax = plt.subplots(figsize=(7.2, max(4.5, 0.25 * len(top_hotspots))))
-        ax.barh(top_hotspots["residue_label_a"], top_hotspots["sum_abs_difference"], color="#6a51a3")
+        hotspot_labels = [
+            _metadata_comparison_residue_label(
+                {"chain": row.chain, "resid": row.resid, "display_resid": row.display_resid, "resname": row.resname_a},
+                {"chain": row.chain, "resid": row.resid, "display_resid": row.display_resid, "resname": row.resname_b},
+            )
+            for row in top_hotspots.itertuples(index=False)
+        ]
+        ax.barh(hotspot_labels, top_hotspots["sum_abs_difference"], color="#6a51a3")
         ax.set_xlabel("sum of absolute incident contact differences")
         ax.set_ylabel("residue")
         ax.set_title("Residue contact-change hotspots")
@@ -264,13 +360,19 @@ def run_contacts(ctx: RunContext) -> None:
     trajectory_frames: dict[str, int] = {}
     trajectory_metadata: dict[str, list[dict[str, Any]]] = {}
     n_residues: int | None = None
-    position_signature: list[tuple[int, int]] | None = None
+    position_signature: list[tuple[int, str]] | None = None
 
     for trajectory_name, universe in _load_universes(cfg):
         if trajectory_name not in requested_names:
             continue
-        counts, n_frames, metadata = _collect_trajectory_contacts(universe, cfg)
-        signature = [(item["chain"], item["resid"]) for item in metadata]
+        residue_selection = cfg.contacts.selection_by_trajectory.get(trajectory_name, cfg.contacts.selection)
+        residue_number_offsets = cfg.contacts.residue_number_offsets_by_trajectory.get(
+            trajectory_name, cfg.contacts.residue_number_offsets
+        )
+        counts, n_frames, metadata = _collect_trajectory_contacts(
+            universe, cfg, residue_selection, residue_number_offsets
+        )
+        signature = [(item["chain_position"], item["resname"]) for item in metadata]
         if position_signature is None:
             position_signature = signature
             n_residues = len(metadata)
@@ -306,8 +408,17 @@ def run_contacts(ctx: RunContext) -> None:
                     "residue_j_chain": metadata[j]["chain"],
                     "residue_i_resid": metadata[i]["resid"],
                     "residue_j_resid": metadata[j]["resid"],
+                    "residue_i_topology_resid": metadata[i]["resid"],
+                    "residue_j_topology_resid": metadata[j]["resid"],
+                    "residue_i_display_resid": metadata[i]["display_resid"],
+                    "residue_j_display_resid": metadata[j]["display_resid"],
+                    "residue_numbering": cfg.contacts.residue_numbering_name,
                     "residue_i_resname": metadata[i]["resname"],
                     "residue_j_resname": metadata[j]["resname"],
+                    "contact_label": (
+                        f"{_metadata_display_residue_label(metadata[i])}"
+                        f" -- {_metadata_display_residue_label(metadata[j])}"
+                    ),
                     "frames_in_contact": int(counts.get(code, 0)),
                     "frames_analyzed": frames,
                     "occupancy": float(counts.get(code, 0) / frames),
@@ -335,12 +446,25 @@ def run_contacts(ctx: RunContext) -> None:
                 "residue_j_chain": metadata_a[j]["chain"],
                 "residue_i_resid": metadata_a[i]["resid"],
                 "residue_j_resid": metadata_a[j]["resid"],
+                "residue_i_topology_resid": metadata_a[i]["resid"],
+                "residue_j_topology_resid": metadata_a[j]["resid"],
+                "residue_i_display_resid": metadata_a[i]["display_resid"],
+                "residue_j_display_resid": metadata_a[j]["display_resid"],
+                "residue_numbering": cfg.contacts.residue_numbering_name,
                 "residue_i_resname_a": metadata_a[i]["resname"],
                 "residue_j_resname_a": metadata_a[j]["resname"],
                 "residue_i_resname_b": metadata_b[i]["resname"],
                 "residue_j_resname_b": metadata_b[j]["resname"],
-                "contact_label_a": f"{_residue_label(metadata_a[i])} -- {_residue_label(metadata_a[j])}",
-                "contact_label_b": f"{_residue_label(metadata_b[i])} -- {_residue_label(metadata_b[j])}",
+                "contact_label_topology_a": f"{_residue_label(metadata_a[i])} -- {_residue_label(metadata_a[j])}",
+                "contact_label_topology_b": f"{_residue_label(metadata_b[i])} -- {_residue_label(metadata_b[j])}",
+                "contact_label_a": (
+                    f"{_metadata_display_residue_label(metadata_a[i])}"
+                    f" -- {_metadata_display_residue_label(metadata_a[j])}"
+                ),
+                "contact_label_b": (
+                    f"{_metadata_display_residue_label(metadata_b[i])}"
+                    f" -- {_metadata_display_residue_label(metadata_b[j])}"
+                ),
                 "mean_occupancy_a": mean_a,
                 "sd_occupancy_a": float(values_a.std(ddof=1)) if len(values_a) > 1 else float("nan"),
                 "mean_occupancy_b": mean_b,
@@ -374,10 +498,15 @@ def run_contacts(ctx: RunContext) -> None:
                 "residue_index": residue_index,
                 "chain": item_a["chain"],
                 "resid": item_a["resid"],
+                "topology_resid": item_a["resid"],
+                "display_resid": item_a["display_resid"],
+                "residue_numbering": cfg.contacts.residue_numbering_name,
                 "resname_a": item_a["resname"],
                 "resname_b": item_b["resname"],
-                "residue_label_a": _residue_label(item_a),
-                "residue_label_b": _residue_label(item_b),
+                "residue_label_topology_a": _residue_label(item_a),
+                "residue_label_topology_b": _residue_label(item_b),
+                "residue_label_a": _metadata_display_residue_label(item_a),
+                "residue_label_b": _metadata_display_residue_label(item_b),
                 "sum_abs_difference": float(incident["abs_difference"].sum()),
                 "net_difference_b_minus_a": float(incident["difference_b_minus_a"].sum()),
                 "max_abs_difference": float(incident["abs_difference"].max()) if len(incident) else 0.0,
@@ -393,6 +522,10 @@ def run_contacts(ctx: RunContext) -> None:
         "atom_selection": cfg.contacts.atom_selection,
         "cutoff_angstrom": cfg.contacts.cutoff_angstrom,
         "min_sequence_separation": cfg.contacts.min_sequence_separation,
+        "residue_numbering": cfg.contacts.residue_numbering_name,
+        "residue_number_offsets": cfg.contacts.residue_number_offsets,
+        "selection_by_trajectory": cfg.contacts.selection_by_trajectory,
+        "residue_number_offsets_by_trajectory": cfg.contacts.residue_number_offsets_by_trajectory,
         "use_pbc": cfg.contacts.use_pbc,
         "comparison": comparison.model_dump(),
         "n_residues": n_residues,

@@ -95,3 +95,75 @@ def test_load_config_rejects_unknown_pca_fit_trajectory(tmp_path: Path) -> None:
 
     with pytest.raises(ValueError, match="pca.fit_trajectory must be one of: t0"):
         load_config(cfg_path)
+
+
+def test_load_config_accepts_chain_aware_rmsd_selections(tmp_path: Path) -> None:
+    top = tmp_path / "top.pdb"
+    trj = tmp_path / "traj.xtc"
+    ref = tmp_path / "ref.pdb"
+    top.write_text("x")
+    trj.write_text("x")
+    ref.write_text("x")
+
+    cfg_path = tmp_path / "cfg_chain_rmsd.yaml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "preset: standard",
+                "system:",
+                f"  topology: {top}",
+                "  trajectories:",
+                f"    - {trj}",
+                "  trajectory_names:",
+                "    - t0",
+                "analyses:",
+                "  rmsd: true",
+                "rmsd:",
+                f"  reference: {ref}",
+                '  selection: "protein and backbone"',
+                '  align_selection: "protein and backbone"',
+                '  reference_align_selection: "protein and backbone and segid A"',
+                "  align_selection_by_trajectory:",
+                '    t0: "protein and backbone and resid 2:157"',
+            ]
+        )
+    )
+
+    cfg = load_config(cfg_path)
+    assert cfg.rmsd.reference_align_selection == "protein and backbone and segid A"
+    assert cfg.rmsd.align_selection_by_trajectory == {
+        "t0": "protein and backbone and resid 2:157"
+    }
+
+
+def test_load_config_rejects_unknown_chain_aware_rmsd_trajectory(tmp_path: Path) -> None:
+    top = tmp_path / "top.pdb"
+    trj = tmp_path / "traj.xtc"
+    top.write_text("x")
+    trj.write_text("x")
+
+    cfg_path = tmp_path / "cfg_invalid_chain_rmsd.yaml"
+    cfg_path.write_text(
+        "\n".join(
+            [
+                "preset: standard",
+                "system:",
+                f"  topology: {top}",
+                "  trajectories:",
+                f"    - {trj}",
+                "  trajectory_names:",
+                "    - t0",
+                "analyses:",
+                "  rmsd: true",
+                "rmsd:",
+                "  align_selection_by_trajectory:",
+                '    missing: "protein and backbone"',
+            ]
+        )
+    )
+
+    with pytest.raises(
+        ValueError,
+        match="rmsd.align_selection_by_trajectory contains unknown trajectories: missing",
+    ):
+        load_config(cfg_path)

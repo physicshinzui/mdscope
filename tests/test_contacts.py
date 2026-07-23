@@ -76,6 +76,8 @@ def test_run_contacts_compares_independent_trajectories(tmp_path: Path, monkeypa
                 "cutoff_angstrom": 4.5,
                 "min_sequence_separation": 3,
                 "minimum_mean_occupancy": 0.0,
+                "residue_number_offsets": {1: 10, 2: 20},
+                "residue_numbering_name": "DMS",
                 "comparison": {
                     "group_a": "WT",
                     "trajectories_a": ["WT_r01"],
@@ -99,6 +101,9 @@ def test_run_contacts_compares_independent_trajectories(tmp_path: Path, monkeypa
     assert len(ranking) >= 1
     assert ranking.iloc[0]["difference_b_minus_a"] == 1.0
     assert ranking.iloc[0]["residue_i_chain"] != ranking.iloc[0]["residue_j_chain"]
+    assert ranking.iloc[0]["residue_numbering"] == "DMS"
+    assert "residue_i_display_resid" in ranking.columns
+    assert "contact_label_topology_a" in ranking.columns
     assert (outdir / "tables" / "contact_residue_hotspots.csv").exists()
     assert (outdir / "figures" / "contact_map_difference_MUT_minus_WT.png").exists()
     assert (outdir / "figures" / "contact_top_differences.png").exists()

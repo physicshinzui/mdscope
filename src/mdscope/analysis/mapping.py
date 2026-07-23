@@ -86,9 +86,10 @@ def build_residue_mapping(
     align_selection: str,
     map_mode: str,
     map_file: Path | None = None,
+    reference_align_selection: str | None = None,
 ) -> tuple[list[Any], list[Any], list[tuple[int, int]], str]:
     mobile_residues = residues_from_selection(mobile_universe, align_selection)
-    ref_residues = residues_from_selection(reference_universe, align_selection)
+    ref_residues = residues_from_selection(reference_universe, reference_align_selection or align_selection)
     mobile_records = residue_records(mobile_residues)
     ref_records = residue_records(ref_residues)
 
@@ -115,4 +116,3 @@ def filter_mapping_to_reference_resindices(
     ref_resindices: set[int],
 ) -> list[tuple[int, int]]:
     return [item for item in mapping if int(ref_residues[item[1]].resindex) in ref_resindices]
-

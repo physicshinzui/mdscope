@@ -185,6 +185,8 @@ system:
 ### RMSD
 
 - `rmsd.align_selection`: residues used for mapping/alignment logic
+- `rmsd.reference_align_selection`: optional independent reference residue selection
+- `rmsd.align_selection_by_trajectory`: optional mobile residue selection keyed by trajectory name
 - `rmsd.selection`: atom set used for RMSD pair matching
 - `rmsd.region_mode: ligand_site` + `rmsd.ligand_selection`: ligand-site-focused RMSD
 - Debug PDB outputs are available for alignment inspection
@@ -247,6 +249,9 @@ contacts:
   minimum_mean_occupancy: 0.05
   minimum_abs_difference: 0.05
   top_n: 30
+  # Optional offsets for biological numbering in plots and explicit CSV columns:
+  residue_number_offsets: {1: 7, 2: -149}
+  residue_numbering_name: DMS
   comparison:
     group_a: WT
     trajectories_a: [WT_r01, WT_r02, WT_r03]
