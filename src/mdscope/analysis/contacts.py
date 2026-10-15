@@ -307,10 +307,9 @@ def plot_contacts_from_tables(config: Any, outdir: Path) -> list[str]:
     )
     rendered.append(diff_stem)
 
-    top = ranking.head(config.contacts.top_n).iloc[::-1]
+    top = ranking.head(config.contacts.top_n)
     if len(top) > 0:
         fig, ax = plt.subplots(figsize=(8.0, max(4.5, 0.28 * len(top))))
-        colors = ["#b2182b" if value > 0 else "#2166ac" for value in top["difference_b_minus_a"]]
         contact_labels = [
             (
                 f"{_row_comparison_residue_label(row, 'i')}"
@@ -318,11 +317,12 @@ def plot_contacts_from_tables(config: Any, outdir: Path) -> list[str]:
             )
             for row in top.itertuples(index=False)
         ]
-        ax.barh(contact_labels, top["difference_b_minus_a"], color=colors)
-        ax.axvline(0.0, color="black", lw=0.8)
-        ax.set_xlabel(f"occupancy difference ({comparison.group_b} - {comparison.group_a})")
-        ax.set_ylabel("residue contact")
-        ax.set_title(f"Top {len(top)} contact differences")
+        from ..plotting import plot_contact_difference_bars
+
+        plot_contact_difference_bars(
+            ax, contact_labels, top["difference_b_minus_a"],
+            comparison.group_a, comparison.group_b,
+        )
         _save_plot(config, fig, dirs["figures"] / "contact_top_differences")
         plt.close(fig)
         rendered.append("contact_top_differences")
@@ -360,7 +360,7 @@ def run_contacts(ctx: RunContext) -> None:
     trajectory_frames: dict[str, int] = {}
     trajectory_metadata: dict[str, list[dict[str, Any]]] = {}
     n_residues: int | None = None
-    position_signature: list[tuple[int, str]] | None = None
+    position_signature: list[tuple[int, int]] | None = None
 
     for trajectory_name, universe in _load_universes(cfg):
         if trajectory_name not in requested_names:
@@ -372,7 +372,7 @@ def run_contacts(ctx: RunContext) -> None:
         counts, n_frames, metadata = _collect_trajectory_contacts(
             universe, cfg, residue_selection, residue_number_offsets
         )
-        signature = [(item["chain_position"], item["resname"]) for item in metadata]
+        signature = [(item["chain"], item["chain_position"]) for item in metadata]
         if position_signature is None:
             position_signature = signature
             n_residues = len(metadata)

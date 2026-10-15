@@ -9,7 +9,7 @@ from mdscope.analysis.contacts import _bh_fdr, run_contacts
 from mdscope.config import AppConfig
 
 
-def _contact_universe(has_interchain_contact: bool):
+def _contact_universe(has_interchain_contact: bool, mutated: bool = False):
     universe = mda.Universe.empty(
         8,
         n_residues=4,
@@ -20,7 +20,10 @@ def _contact_universe(has_interchain_contact: bool):
     universe.add_TopologyAttr("names", ["CA", "CB"] * 4)
     universe.add_TopologyAttr("types", ["C"] * 8)
     universe.add_TopologyAttr("masses", [12.0] * 8)
-    universe.add_TopologyAttr("resnames", ["ALA"] * 4)
+    resnames = ["ALA"] * 4
+    if mutated:
+        resnames[1] = "CYS"
+    universe.add_TopologyAttr("resnames", resnames)
     universe.add_TopologyAttr("resids", [1, 2, 3, 4])
     universe.add_TopologyAttr("segids", ["PROT"])
     universe.add_TopologyAttr(
@@ -92,7 +95,7 @@ def test_run_contacts_compares_independent_trajectories(tmp_path: Path, monkeypa
         "mdscope.analysis.contacts._load_universes",
         lambda _cfg: [
             ("WT_r01", _contact_universe(False)),
-            ("MUT_r01", _contact_universe(True)),
+            ("MUT_r01", _contact_universe(True, mutated=True)),
         ],
     )
     run_contacts(RunContext(config=cfg, outdir=outdir, cache={}))

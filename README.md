@@ -248,7 +248,7 @@ contacts:
   use_pbc: true
   minimum_mean_occupancy: 0.05
   minimum_abs_difference: 0.05
-  top_n: 30
+  top_n: 10
   # Optional offsets for biological numbering in plots and explicit CSV columns:
   residue_number_offsets: {1: 7, 2: -149}
   residue_numbering_name: DMS
@@ -262,6 +262,13 @@ contacts:
 Outputs include per-trajectory occupancies, a complete comparison table,
 ranked contact differences, residue hotspot scores, mean contact maps, and a
 signed difference map. Positive differences mean `group_b - group_a`.
+
+Across trajectories, residue compatibility is checked using
+`(chain, chain_position)`. Residue names may differ at corresponding positions,
+so point substitutions such as WT R139 versus R139C C139 are retained with
+group-specific labels. See
+[point-mutation residue correspondence](docs/CONTACT_MUTATION_MAPPING.md) for
+the implementation history, validation, and limitations.
 
 ## Output Structure
 

@@ -357,7 +357,7 @@ class ContactsConfig(BaseModel):
     use_pbc: bool = True
     minimum_mean_occupancy: float = 0.05
     minimum_abs_difference: float = 0.0
-    top_n: int = 30
+    top_n: int = 10
     residue_number_offsets: dict[int, int] = {}
     residue_number_offsets_by_trajectory: dict[str, dict[int, int]] = {}
     residue_numbering_name: str = "topology"

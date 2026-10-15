@@ -2,13 +2,17 @@ from pathlib import Path
 
 import pytest
 
-from mdscope.config import generate_template, load_config
+from mdscope.config import ContactsConfig, generate_template, load_config
 
 
 def test_generate_template_contains_system() -> None:
     text = generate_template("standard")
     assert "system:" in text
     assert "topology:" in text
+
+
+def test_contacts_default_top_n_is_ten() -> None:
+    assert ContactsConfig().top_n == 10
 
 
 def test_load_config_valid(tmp_path: Path) -> None:
